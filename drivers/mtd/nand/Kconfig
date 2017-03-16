@@ -546,4 +546,11 @@ config MTD_NAND_HISI504
 	help
 	  Enables support for NAND controller on Hisilicon SoC Hip04.
 
+config MTD_NAND_SMC353
+	tristate "ARM SMC353 NAND controller driver"
+	depends on ARM_SMC353
+	default y
+	help
+	  Enables support for NAND Flash chips on SMC353 controller.
+
 endif # MTD_NAND
