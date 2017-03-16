@@ -78,4 +78,5 @@ obj-$(CONFIG_EDAC_ALTERA)		+= altera_edac.o
 obj-$(CONFIG_EDAC_SYNOPSYS)		+= synopsys_edac.o
 obj-$(CONFIG_EDAC_XGENE)		+= xgene_edac.o
 obj-$(CONFIG_EDAC_DDR_MC_NETX4000)	+= edac-ddr-mc-netx4000.o
+obj-$(CONFIG_EDAC_CACHE_DC_NETX4000)	+= edac-cache-dc-netx4000.o
 
