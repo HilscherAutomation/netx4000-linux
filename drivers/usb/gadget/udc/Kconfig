@@ -443,6 +443,17 @@ config USB_GADGET_XILINX
 
 source "drivers/usb/gadget/udc/aspeed-vhub/Kconfig"
 
+config USB_GADGET_NETX4000
+	tristate "USB device controller driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects support for the USB device controller on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called udc-netx4000.
+
+
 #
 # LAST -- dummy/emulated controller
 #
