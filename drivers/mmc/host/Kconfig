@@ -872,15 +872,16 @@ config MMC_MTK
 	  If unsure, say N.
 
 config MMC_SDHCI_MICROCHIP_PIC32
-        tristate "Microchip PIC32MZDA SDHCI support"
-        depends on MMC_SDHCI && PIC32MZDA && MMC_SDHCI_PLTFM
-        help
-          This selects the Secure Digital Host Controller Interface (SDHCI)
-          for PIC32MZDA platform.
+	tristate "Microchip PIC32MZDA SDHCI support"
+	depends on MMC_SDHCI && PIC32MZDA && MMC_SDHCI_PLTFM
+	help
+	  This selects the Secure Digital Host Controller Interface (SDHCI)
+	  for PIC32MZDA platform.
 
-          If you have a controller with this interface, say Y or M here.
+	  If you have a controller with this interface, say Y or M here.
 
-          If unsure, say N.
+	  If unsure, say N.
+
 config MMC_SDHCI_BRCMSTB
 	tristate "Broadcom SDIO/SD/MMC support"
 	depends on ARCH_BRCMSTB || BMIPS_GENERIC
@@ -899,3 +900,13 @@ config MMC_SDHCI_XENON
 	  This selects Marvell Xenon eMMC/SD/SDIO SDHCI.
 	  If you have a controller with this interface, say Y or M here.
 	  If unsure, say N.
+
+config MMC_NETX4000
+	tristate "SD/MMC Host Controller driver for netX4000 based platfroms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects support for the SD/MMC host controller on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called sdmmc-netx4000.
