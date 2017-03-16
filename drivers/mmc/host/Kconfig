@@ -798,3 +798,13 @@ config MMC_SDHCI_BRCMSTB
 	  Broadcom STB SoCs.
 
 	  If unsure, say Y.
+
+config MMC_NETX4000
+	tristate "SD/MMC Host Controller driver for netX4000 based platfroms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects support for the SD/MMC host controller on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called sdmmc-netx4000.
