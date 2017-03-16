@@ -796,6 +796,20 @@ config USB_HCD_SSB
 
 	  If unsure, say N.
 
+config USB_HCD_NETX4000
+	tristate "USB host controller driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	select USB_OHCI_HCD
+	select USB_OHCI_HCD_PLATFORM
+	select USB_EHCI_HCD
+	select USB_EHCI_HCD_PLATFORM
+	default y
+	help
+	  This selects support for the USB host controllers on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called hcd-netx4000.
+
 config USB_HCD_TEST_MODE
 	bool "HCD test mode support"
 	---help---
