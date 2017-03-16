@@ -737,17 +737,17 @@ static void dwceqos_mdio_set_csr(struct net_local *lp)
 {
 	int rate = clk_get_rate(lp->apb_pclk);
 
-	if (rate <= 20000000)
+	if (rate <= 35000000)
 		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_20;
-	else if (rate <= 35000000)
-		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_35;
 	else if (rate <= 60000000)
-		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_60;
+		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_35;
 	else if (rate <= 100000000)
-		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_100;
+		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_60;
 	else if (rate <= 150000000)
-		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_150;
+		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_100;
 	else if (rate <= 250000000)
+		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_150;
+	else if (rate <= 300000000)
 		lp->csr_val = DWCEQOS_MAC_MDIO_ADDR_CR_250;
 }
 
