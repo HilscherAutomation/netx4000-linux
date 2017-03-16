@@ -15,6 +15,14 @@ config ARM_PL172_MPMC
 	  If you have an embedded system with an AMBA bus and a PL172
 	  controller, say Y or M here.
 
+config ARM_SMC353
+	tristate "ARM SMC353 Static Memory Controller driver"
+	depends on ARM_AMBA
+	help
+	  This selects the ARM Static Memory Controller SMC353.
+	  If you have an embedded system with an AMBA bus and a SMC353
+	  controller, say Y or M here.
+
 config ATMEL_SDRAMC
 	bool "Atmel (Multi-port DDR-)SDRAM Controller"
 	default y
