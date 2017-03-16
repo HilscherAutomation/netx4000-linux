@@ -412,6 +412,25 @@ config ARCH_NETX
 	help
 	  This enables support for systems based on the Hilscher NetX Soc
 
+config ARCH_NETX4000
+	bool "Hilscher netX4000 based"
+	select ARCH_REQUIRE_GPIOLIB
+	select ARM_GIC
+	select PINCTRL
+	select PINMUX
+	select GENERIC_PINCONF
+	select CPU_V7
+	select GENERIC_CLOCKEVENTS
+	select ARM_AMBA
+	select COMMON_CLK
+	select CLKSRC_OF
+	select ARM_GLOBAL_TIMER
+	select HAVE_SMP
+	select HAVE_ARM_SCU if SMP
+	select MIGHT_HAVE_CACHE_L2X0
+	help
+	  This enables support for systems based on the Hilscher netX4000 SoC
+
 config ARCH_IOP13XX
 	bool "IOP13xx-based"
 	depends on MMU
@@ -776,6 +795,8 @@ source "arch/arm/mach-mediatek/Kconfig"
 source "arch/arm/mach-mxs/Kconfig"
 
 source "arch/arm/mach-netx/Kconfig"
+
+source "arch/arm/mach-netx4000/Kconfig"
 
 source "arch/arm/mach-nomadik/Kconfig"
 
