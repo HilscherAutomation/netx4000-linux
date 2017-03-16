@@ -462,4 +462,14 @@ config EDAC_XGENE
 	  Support for error detection and correction on the
 	  APM X-Gene family of SOCs.
 
+config EDAC_DDR_MC_NETX4000
+	tristate "EDAC DDR MC driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects EDAC support for the DDR memory controller on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called edac-ddr-mc-netx4000.
+
 endif # EDAC
