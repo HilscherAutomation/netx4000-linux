@@ -531,6 +531,16 @@ config GPIO_LOONGSON1
 	help
 	  Say Y or M here to support GPIO on Loongson1 SoCs.
 
+config GPIO_NETX4000
+	tristate "GPIO driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects GPIO support on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called gpio-netx4000.
+
 endmenu
 
 menu "Port-mapped I/O GPIO drivers"
