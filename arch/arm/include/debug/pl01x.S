@@ -27,7 +27,7 @@
 #endif
 
 		.macro	senduart,rd,rx
-		strb	\rd, [\rx, #UART01x_DR]
+		strh	\rd, [\rx, #UART01x_DR]
 		.endm
 
 		.macro	waituart,rd,rx
