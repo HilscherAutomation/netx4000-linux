@@ -76,12 +76,11 @@
  */
 #define XIP_VIRT_ADDR(physaddr)  (MODULES_VADDR + ((physaddr) & 0x000fffff))
 
-#if !defined(CONFIG_SMP) && !defined(CONFIG_ARM_LPAE)
+/* The ioremap alignment (of 16MB) is required for pl353 communcication */
 /*
  * Allow 16MB-aligned ioremap pages
  */
 #define IOREMAP_MAX_ORDER	24
-#endif
 
 #else /* CONFIG_MMU */
 
