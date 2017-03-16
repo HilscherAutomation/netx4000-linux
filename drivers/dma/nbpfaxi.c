@@ -1080,7 +1080,13 @@ static struct dma_chan *nbpf_of_xlate(struct of_phandle_args *dma_spec,
 	if (dma_spec->args_count != 2)
 		return NULL;
 
+#ifdef CONFIG_ARCH_NETX4000
+	dma_spec->args_count--;
+	dchan = of_dma_xlate_by_chan_id(dma_spec, ofdma);
+	dma_spec->args_count++;
+#else
 	dchan = dma_get_any_slave_channel(&nbpf->dma_dev);
+#endif
 	if (!dchan)
 		return NULL;
 
