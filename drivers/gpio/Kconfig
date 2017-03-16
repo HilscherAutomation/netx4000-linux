@@ -666,6 +666,17 @@ config GPIO_AMD_FCH
 	  Note: This driver doesn't registers itself automatically, as it
 	  needs to be provided with platform specific configuration.
 	  (See eg. CONFIG_PCENGINES_APU2.)
+
+config GPIO_NETX4000
+	tristate "GPIO driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects GPIO support on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called gpio-netx4000.
+
 endmenu
 
 menu "Port-mapped I/O GPIO drivers"
