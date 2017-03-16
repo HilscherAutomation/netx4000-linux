@@ -654,6 +654,16 @@ config SPI_NUC900
 	help
 	  SPI driver for Nuvoton NUC900 series ARM SoCs
 
+config QSPI_NETX4000
+	tristate "QSPI driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects support for Quad Serial Peripheral Interface (QSPI) controller on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called qspi-netx4000.
+
 #
 # Add new SPI master controllers in alphabetical order above this line
 #
