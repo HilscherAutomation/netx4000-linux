@@ -472,4 +472,14 @@ config EDAC_DDR_MC_NETX4000
 	  To compile this driver as a module, choose M here:
 	  the module will be called edac-ddr-mc-netx4000.
 
+config EDAC_CACHE_DC_NETX4000
+	tristate "EDAC CACHE DC driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects EDAC support for the cache controller on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called edac-cache-dc-netx4000.
+
 endif # EDAC
