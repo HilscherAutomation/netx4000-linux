@@ -585,4 +585,14 @@ config XILINX_XADC
 	  The driver can also be build as a module. If so, the module will be called
 	  xilinx-xadc.
 
+config IIO_ADC_NETX4000
+	tristate "IIO ADC driver for netX4000 based platforms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects support for the IIO ADC controllers on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called iio-adc-netx4000.
+
 endmenu
