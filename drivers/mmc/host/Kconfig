@@ -786,3 +786,14 @@ config MMC_MTK
 	  If you have a machine with a integrated SD/MMC card reader, say Y or M here.
 	  This is needed if support for any SD/SDIO/MMC devices is required.
 	  If unsure, say N.
+
+config MMC_NETX4000
+	tristate "SD/MMC Host Controller driver for netX4000 based platfroms"
+	depends on ARCH_NETX4000
+	default y
+	help
+	  This selects support for the SD/MMC host controller on Hilscher netX4000 based platforms.
+
+	  To compile this driver as a module, choose M here:
+	  the module will be called sdmmc-netx4000.
+
