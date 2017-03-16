@@ -1,0 +1,7 @@
+config MACH_NETX4000
+	bool
+	default y
+	depends on ARCH_NETX4000
+	help
+	  Generic support for Hilscher netX4000 based platforms
+
