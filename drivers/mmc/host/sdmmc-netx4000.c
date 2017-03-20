@@ -831,7 +831,7 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	struct mmc_host *mmc;
 	struct netx4000_hsmmc_host *host = NULL;
 	struct resource *res;
-	int ret, cd_irq_idx,access_irq_idx,irq_cd,irq_access;
+	int ret, irq_cd,irq_access;
 	void __iomem *base;
 	struct device_node *np = pdev->dev.of_node;
         
@@ -839,10 +839,8 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
-	of_property_read_u32(np, "cd-irq", &cd_irq_idx);
-	irq_cd = platform_get_irq(pdev, cd_irq_idx);
-	access_irq_idx = (cd_irq_idx == 0) ? 1 : 0;
-	irq_access = platform_get_irq(pdev, access_irq_idx);
+	irq_cd = platform_get_irq_byname(pdev, "card");
+	irq_access = platform_get_irq_byname(pdev, "access");
 	if ((res == NULL) || (irq_cd < 0) || (irq_access < 0))
 		return -ENXIO;
 
