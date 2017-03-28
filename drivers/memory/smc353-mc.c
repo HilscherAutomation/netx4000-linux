@@ -311,7 +311,7 @@ void smc35x_set_buswidth(struct device *dev, uint8_t cs_addr, unsigned int bw)
 
 	if (smc_data) {
 		int i=0;
-		struct smc_dev_data *smc_plat_data = (struct smc_dev_data*)smc_data->childlist;
+		struct smc_dev_data *smc_plat_data = (struct smc_dev_data*)smc_data->childlist[i];
 
 		while((i<smc_data->childno) && smc_plat_data) {
 			if (smc_plat_data->cs_addr == cs_addr) {
