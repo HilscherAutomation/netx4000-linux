@@ -1,24 +1,26 @@
 /*
-* SMC353 NAND driver for Hilscher netx4000 based platforms
-*
-* drivers/mtd/nand/smc353-nand.c
-*
-* (C) Copyright 2015 Hilscher Gesellschaft fuer Systemautomation mbH
-* http://www.hilscher.com
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License as
-* published by the Free Software Foundation; version 2 of
-* the License.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-*/
+ * ARM PL35X NAND Flash Controller Driver
+ *
+ * Copyright (C) 2009 - 2014 Xilinx, Inc.
+ *
+ * This driver is based on plat_nand.c and mxc_nand.c drivers
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License version 2 as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.
+ */
+/*
+ * drivers/mtd/nand/smc353-nand.c
+ *
+ * (C) Copyright 2017 Hilscher Gesellschaft fuer Systemautomation mbH
+ * http://www.hilscher.com
+ * - Apdapted ECC initialization for Hilscher netx4000 based platforms.
+ * - Add bch-ecc support.
+ */
 
-#define DRIVER_DESC  "SMC353 NAND driver for Hilscher netx4000 based platforms"
+//#define DRIVER_DESC  "SMC353 NAND driver for Hilscher netx4000 based platforms"
+#define DRIVER_DESC  "ARM PL35X NAND Flash Driver"
 #define DRIVER_NAME  "smc353-nand-netx4000"
 
 #include <linux/kernel.h>
@@ -1396,7 +1398,9 @@ static int smc35x_nand_init(void)
 }
 module_init(smc35x_nand_init);
 
+MODULE_AUTHOR("Xilinx, Inc.");
 MODULE_AUTHOR("Hilscher Gesellschaft fuer Systemautomation mbH");
+MODULE_ALIAS("platform:" PL35X_NAND_DRIVER_NAME);
 MODULE_DESCRIPTION(DRIVER_DESC);
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
 
