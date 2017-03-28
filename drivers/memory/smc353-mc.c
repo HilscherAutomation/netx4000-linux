@@ -3,6 +3,8 @@
 *
 * drivers/memory/smc353-mc.c
 *
+* This driver based on https://github.com/Xilinx/linux-xlnx/blob/master/drivers/memory/pl35x-smc.c
+*
 * (C) Copyright 2015 Hilscher Gesellschaft fuer Systemautomation mbH
 * http://www.hilscher.com
 *
