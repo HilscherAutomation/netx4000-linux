@@ -21,7 +21,7 @@
 #define DRIVER_DESC  "Framebuffer driver for Hilscher netx4000 based platforms"
 #define DRIVER_NAME  "fb-netx4000"
 
-#define TEST_PICTURE  1
+//#define TEST_PICTURE  1
 
 #define setBF(val,regpos)  (((val) & regpos##_mask) << regpos##_shift)
 #define getBF(val,regpos)  (((val) >> regpos##_shift) & regpos##_mask)
