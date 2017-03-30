@@ -2495,6 +2495,12 @@ config FB_NETX4000
 	tristate "Framebuffer driver for netX4000 based platforms"
 	depends on ARCH_NETX4000
 	default y
+	select FB_SYS_FOPS
+	select FB_SYS_FILLRECT
+	select FB_SYS_COPYAREA
+	select FB_SYS_IMAGEBLIT
+	select FB_MODE_HELPERS
+	select VIDEOMODE_HELPERS
 	help
 	  This selects framebuffer support on Hilscher netX4000 based platforms.
 
