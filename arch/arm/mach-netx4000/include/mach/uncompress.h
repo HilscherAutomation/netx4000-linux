@@ -31,6 +31,6 @@ static inline void arch_decomp_setup(void) {}
 
 static inline void putc(char c)
 {
-	while (__raw_readw(CONFIG_DEBUG_UART_VIRT + UART01x_FR) & UART01x_FR_TXFF);
+	while (__raw_readw((void* __iomem)(CONFIG_DEBUG_UART_VIRT + UART01x_FR)) & UART01x_FR_TXFF);
 	__raw_writew(c,(void* __iomem)(CONFIG_DEBUG_UART_VIRT + UART01x_DR));
 }

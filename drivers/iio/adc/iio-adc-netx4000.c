@@ -166,7 +166,8 @@ static const struct iio_chan_spec netx4000_iio_adc_channels[] = {
 static int netx4000_iio_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spec const *chan, int *val, int *val2, long info)
 {
 	struct priv_data *pdata = iio_priv(indio_dev);
-	uint32_t regval, timeout;
+	uint32_t regval;
+	unsigned long timeout;
 	int rc = 0;
 
 	mutex_lock(&pdata->lock);

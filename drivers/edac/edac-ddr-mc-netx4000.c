@@ -144,8 +144,7 @@ struct priv_data {
 #ifdef FEATURE_ERROR_INJECTION
 	uint32_t xor_check_bits;
 	uint32_t lock;
-#endif	
-	
+#endif
 };
 
 #ifdef FEATURE_ERROR_INJECTION
@@ -158,7 +157,7 @@ struct priv_data {
  * netx4000_edac_ddr_mc_thread_function
  * @data:	Pointer to private data
  *
- * Return:	
+ * Return:
  */
 static int netx4000_edac_ddr_mc_thread_function(void *data)
 {
@@ -182,15 +181,15 @@ static int netx4000_edac_ddr_mc_thread_function(void *data)
 	xor_check_bits(priv->baseaddr, priv->xor_check_bits);
 
 	flush_cache_all();
-	
+
 	fwc(priv->baseaddr, 1);
-	
+
 	*testbuf = 0x20161216;
 	testval = *testbuf;
 
 	spin_unlock_irqrestore(&mLock, flags);
 
-	dma_free_coherent(NULL, sizeof(*testbuf), testbuf, dma_handle);
+	dma_free_coherent(NULL, sizeof(*testbuf), (void*)testbuf, dma_handle);
 
 	priv->lock = 0;
 
@@ -200,22 +199,22 @@ static int netx4000_edac_ddr_mc_thread_function(void *data)
 /**
  * netx4000_edac_ddr_mc_error_injection_store
  * @dev:	Pointer to the platform_device struct
- * @mattr:	
+ * @mattr:
  * @buf:	Pointer to user data
  * @count:	Number of given data bytes
  *
- * Return:	
+ * Return:
  */
 static ssize_t netx4000_edac_ddr_mc_error_injection_store(struct device *dev, struct device_attribute *mattr, const char *buf, size_t count)
 {
 	struct mem_ctl_info *mci = to_mci(dev);
 	struct priv_data *priv = mci->pvt_info;
-	struct task_struct *task;	
+	struct task_struct *task;
 	spinlock_t mLock;
 	unsigned long flags, cpu;
-	
+
 	pr_debug("%s: running at cpu%d\n", __func__, smp_processor_id());
-	
+
 	if (sscanf(buf, "%x", &priv->xor_check_bits) < 1) {
 		pr_err("Invalid or missing arguments [xor_check_bits]\n");
 		return -EINVAL;
@@ -238,9 +237,9 @@ static ssize_t netx4000_edac_ddr_mc_error_injection_store(struct device *dev, st
 			udelay(100);
 		}
 	}
-	
+
 	spin_unlock_irqrestore(&mLock, flags);
-	
+
 	return count;
 }
 
