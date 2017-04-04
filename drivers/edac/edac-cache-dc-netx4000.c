@@ -62,14 +62,13 @@ struct priv_data {
  * @buf:	Pointer to user data
  * @count:	Number of given data bytes
  *
- * Return:	
+ * Return:
  */
 static ssize_t netx4000_edac_cache_dc_error_injection_store(struct edac_device_ctl_info *cdi, const char *buf, size_t count)
 {
 	struct priv_data *priv = cdi->pvt_info;
 	uint32_t regoff, regval, timeout;
-	
-	
+
 	if (sscanf(buf, "%x %x", &regoff, &regval) < 2) {
 		pr_err("Invalid or missing arguments [regoff, regval]\n");
 		return -EINVAL;
@@ -86,7 +85,7 @@ static ssize_t netx4000_edac_cache_dc_error_injection_store(struct edac_device_c
 		pr_err("An error injection is already active.\n");
 		return -EBUSY;
 	}
-	
+
 	priv->regaddr = priv->ba + (regoff&~0x3);
 	iowrite32(regval, priv->regaddr);
 
@@ -107,7 +106,7 @@ static ssize_t netx4000_edac_cache_dc_error_injection_store(struct edac_device_c
 
 static struct edac_dev_sysfs_attribute netx4000_edac_cache_dc_sysfs_attributes[] = {
 	__ATTR(error_injection, S_IWUSR, NULL, netx4000_edac_cache_dc_error_injection_store),
-	NULL
+	__ATTR_NULL
 };
 
 #endif /* FEATURE_ERROR_INJECTION */
@@ -118,8 +117,8 @@ static irqreturn_t netx4000_edac_cache_dc_isr(int irq, void *dev_id)
 	struct priv_data *priv = dci->pvt_info;
 	uint32_t val32;
 	char msg[64];
-	
-#ifdef FEATURE_ERROR_INJECTION	
+
+#ifdef FEATURE_ERROR_INJECTION
 	if (priv->regaddr) {
 		iowrite32(0, priv->regaddr);
 		priv->regaddr = 0;
@@ -181,7 +180,7 @@ static int netx4000_edac_cache_dc_probe(struct platform_device *pdev)
 {
 	struct edac_device_ctl_info *dci;
 	struct priv_data *priv;
-	struct of_device_id *id;
+	const struct of_device_id *id;
 	int rc;
 
 	switch (edac_op_state) {
@@ -202,7 +201,7 @@ static int netx4000_edac_cache_dc_probe(struct platform_device *pdev)
 	}
 
 	priv = dci->pvt_info;
-	
+
 	platform_set_drvdata(pdev, dci);
 
 	/* Read the register base address from DT and map it */
@@ -226,7 +225,7 @@ static int netx4000_edac_cache_dc_probe(struct platform_device *pdev)
 	/* Register all required IRQs from DT */
 	{
 		uint32_t *pirq = &priv->irq_sbe_core0, nirq=6;
-		
+
 		priv->irq_sbe_core0 = platform_get_irq_byname(pdev, "sbe-core0");
 		priv->irq_dbe_core0 = platform_get_irq_byname(pdev, "dbe-core0");
 		priv->irq_sbe_core1 = platform_get_irq_byname(pdev, "sbe-core1");
@@ -302,4 +301,3 @@ module_exit(netx4000_edac_cache_dc_exit);
 MODULE_AUTHOR("Hilscher Gesellschaft fuer Systemautomation mbH");
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL v2");
-
