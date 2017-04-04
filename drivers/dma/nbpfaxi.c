@@ -1073,7 +1073,9 @@ static void nbpf_free_chan_resources(struct dma_chan *dchan)
 static struct dma_chan *nbpf_of_xlate(struct of_phandle_args *dma_spec,
 				      struct of_dma *ofdma)
 {
+#ifndef CONFIG_ARCH_NETX4000
 	struct nbpf_device *nbpf = ofdma->of_dma_data;
+#endif
 	struct dma_chan *dchan;
 	struct nbpf_channel *chan;
 
