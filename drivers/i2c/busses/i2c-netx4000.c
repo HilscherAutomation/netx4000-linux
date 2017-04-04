@@ -229,7 +229,7 @@ static int32_t netx4000_fifo_handler(void *dev_id) {
 	uint32_t nbytes, wm;
 
 	dev_dbg(pdata->dev, "%s() called\n", __func__);
-	
+
 	if (pdata->msg) {
 		if ((pdata->msg->flags & I2C_M_RD) != 0) { /* Read cycle */
 			nbytes = (readl(base + I2C_SR) & SR_MFIFO_LEVEL_MASK) >> SR_MFIFO_LEVEL_SHIFT;
@@ -248,7 +248,7 @@ static int32_t netx4000_fifo_handler(void *dev_id) {
 				writel((uint32_t)*pdata->msg->buf++, base + I2C_MDR);
 				pdata->msg->len--;
 			}
-			wm = min(pdata->msg->len, (u16)(16*3/4)-1);
+			wm = min(pdata->msg->len, (u16)(16*3/4-1));
 			wm = (wm) ? (16-wm) : (0);
 			writel(wm << MFIFO_CR_MFIFO_WM_SHIFT, base + I2C_MFIFO_CR);
 		}
@@ -778,4 +778,3 @@ module_exit(netx4000_i2c_exit);
 MODULE_AUTHOR("Hilscher Gesellschaft fuer Systemautomation mbH");
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL v2");
-
