@@ -519,7 +519,7 @@ config MTD_NAND_NUC900
 config MTD_NAND_PL35X
 	tristate "ARM Pl35X NAND flash driver"
 	depends on MTD_NAND && ARM
-	depends on PL35X_SMC
+	depends on ARM_SMC353
 	help
 	  This enables access to the NAND flash device on PL351/PL353
 	  SMC controller.
