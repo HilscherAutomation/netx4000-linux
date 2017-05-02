@@ -427,6 +427,7 @@ config ARCH_NETX4000
 	select ARM_GLOBAL_TIMER
 	select HAVE_SMP
 	select HAVE_ARM_SCU if SMP
+	select HAVE_ARM_TWD if SMP
 	select MIGHT_HAVE_CACHE_L2X0
 	help
 	  This enables support for systems based on the Hilscher netX4000 SoC
