@@ -1374,11 +1374,9 @@ freemem:
 
 /** smc35x nand driver -> device registered by platforms */
 static __maybe_unused struct of_device_id smc35x_nand_id_table[] = {
-	{
-		.compatible = "arm,smc35x-nand",
-	}, {
-		/* sentinel */
-	}
+	{ .compatible = "arm,smc35x-nand" },
+	{ .compatible = "arm,pl353-nand-r2p1" },
+	{ /* sentinel */ }
 };
 
 static struct platform_driver smc35x_nand_driver = {
