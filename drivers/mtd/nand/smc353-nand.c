@@ -100,8 +100,6 @@ struct pl353_nand_command_format {
 #define PL353_NAND_DATA_PHASE	2	/* End command valid in data phase */
 #define PL353_NAND_ECC_SIZE	512	/* Size of data for ECC operation */
 
-static uint8_t pl353_read_byte(struct mtd_info *mtd);
-
 static struct pl353_nand_info *s_nand = NULL;
 
 
@@ -112,7 +110,7 @@ int get_ondie_ecc_state(struct mtd_info *mtd){
                         ONDIE_ECC_FEATURE_ADDR, -1);
     
 	nand_chip->IO_ADDR_R = (void __iomem*)((((uint32_t)(nand_chip->IO_ADDR_R)) | (1UL<<21)));
-	get_feature = pl353_read_byte(mtd);
+	get_feature = readb(nand_chip->IO_ADDR_R);
 
 	return !!(get_feature & 0x08);
 }
@@ -365,10 +363,10 @@ static int pl353_nand_detect_ondie_ecc(struct mtd_info *mtd)
 	nand_chip->cmdfunc(mtd, NAND_CMD_READID, 0x00, -1);
 
 	/* Read manufacturer and device IDs */
-	maf_id = pl353_read_byte(mtd);
+	maf_id = readb(nand_chip->IO_ADDR_R);
 	/* clear chip select to mark last transfer */
 	nand_chip->IO_ADDR_R = (void __iomem*)((((uint32_t)(nand_chip->IO_ADDR_R)) | (1UL<<21)));
-	dev_id = pl353_read_byte(mtd);
+	dev_id = readb(nand_chip->IO_ADDR_R);
 
 	if ((maf_id == NAND_MFR_MICRON) &&
 	    ((dev_id == 0xf1) || (dev_id == 0xa1) ||
@@ -385,7 +383,7 @@ static int pl353_nand_detect_ondie_ecc(struct mtd_info *mtd)
 				   ONDIE_ECC_FEATURE_ADDR, -1);
 
 		nand_chip->IO_ADDR_R = (void __iomem*)((((uint32_t)(nand_chip->IO_ADDR_R)) | (1UL<<21)));
-		get_feature = pl353_read_byte(mtd);
+		get_feature = readb(nand_chip->IO_ADDR_R);
 
 		if (get_feature & 0x08) {
 			return 1;
@@ -401,7 +399,7 @@ static int pl353_nand_detect_ondie_ecc(struct mtd_info *mtd)
 					   ONDIE_ECC_FEATURE_ADDR, -1);
 			
 			nand_chip->IO_ADDR_R = (void __iomem*)((((uint32_t)(nand_chip->IO_ADDR_R)) | (1UL<<21)));
-			get_feature = pl353_read_byte(mtd);
+			get_feature = readb(nand_chip->IO_ADDR_R);
 
 			if (get_feature & 0x08)
 				return 1;
@@ -1231,21 +1229,6 @@ static void pl353_nand_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
 }
 
 /**
- * pl353_read_byte - read a byte
- * @mtd:	Pointer to the mtd info structure
- * @len:	value of the byte to read
- */
-static uint8_t pl353_read_byte(struct mtd_info *mtd) 
-{
-	struct nand_chip *chip = mtd->priv;
-	uint16_t buf;
-
-	buf = readw(chip->IO_ADDR_R);
-	
-	return (buf & 0x00FF);
-}
-
-/**
  * pl353_nand_write_buf - write buffer to chip
  * @mtd:	Pointer to the mtd info structure
  * @buf:	Pointer to the buffer to store read data
@@ -1325,7 +1308,6 @@ static int smc35x_nand_probe(struct platform_device *dev)
 	/* 32-bit read/write is required, this is not supported by nand_base */
 	nand_chip->read_buf  = pl353_nand_read_buf;
 	nand_chip->write_buf = pl353_nand_write_buf;
-	nand_chip->read_byte = pl353_read_byte; /* since we can not byte-access we offer a wrapper function accessing word-aligned */
 
 	/* Set the device option and flash width */
 	nand_chip->options = NAND_BUSWIDTH_AUTO;
@@ -1344,8 +1326,8 @@ static int smc35x_nand_probe(struct platform_device *dev)
 	/* enable and configure ecc mode */
 	pl353_nand_ecc_init(mtd, dev->dev.of_node);
 
-	if (!(nand_chip->options & NAND_BUSWIDTH_16))
-		smc35x_set_buswidth(dev->dev.parent, nand->cs_addr, 0);
+	if (nand_chip->options & NAND_BUSWIDTH_16)
+		smc35x_set_buswidth(dev->dev.parent, nand->cs_addr, PL353_SMC_MEM_WIDTH_16);
 	/* second phase scan */
 	if (nand_scan_tail(mtd)) {
 		dev_dbg(&dev->dev, "nand_scan_tail for NAND failed\n");

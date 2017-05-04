@@ -114,6 +114,7 @@ struct smc_dev_data {
 	int cs;
 	int ifc;
 	uint8_t cs_addr;
+	int bw;
 	u32 cycles;
 	u32 mode;
 	struct device_node *of_node;
@@ -595,7 +596,7 @@ static int configure_nor_interface(struct device_node *dev_node, struct smc_dev_
 
 	if (0 == (ret = read_sram_parameter_from_dt(dev_node, smc_plat_data, &smc_t))) {
 		if (0 == (ret = setup_sram_parameter_from_dt(dev_node, smc_plat_data, &smc_t))) {
-			pl353_smc_set_buswidth(smc_plat_data, PL353_SMC_MEM_WIDTH_16);
+			pl353_smc_set_buswidth(smc_plat_data, smc_plat_data->bw);
 			pl353_smc_update_register(smc_plat_data);
 		}
 	}
@@ -617,7 +618,7 @@ static int configure_sram_interface(struct device_node *dev_node, struct smc_dev
 		if (0 == (ret = setup_sram_parameter_from_dt(dev_node, smc_plat_data, &smc_t))) {
 			int period = 1;//TODO: check if refresh is required
 			pl353_smc_set_refresh_period(smc_plat_data, period);
-			pl353_smc_set_buswidth(smc_plat_data, PL353_SMC_MEM_WIDTH_16);
+			pl353_smc_set_buswidth(smc_plat_data, smc_plat_data->bw);
 			pl353_smc_update_register(smc_plat_data);
 		}
 	}
@@ -637,7 +638,7 @@ static int configure_nand_interface(struct device_node *dev_node, struct smc_dev
 
 	if (0 == (ret = read_nand_parameter_from_dt(dev_node, smc_plat_data, &smc_t))) {
 		if (0 ==(ret = setup_nand_parameter_from_dt(dev_node, smc_plat_data, &smc_t))) {
-			pl353_smc_set_buswidth(smc_plat_data,PL353_SMC_MEM_WIDTH_16);
+			pl353_smc_set_buswidth(smc_plat_data,smc_plat_data->bw);
 			pl353_smc_update_register(smc_plat_data);
 		}
 	}
@@ -657,6 +658,7 @@ static int smc35x_probe_nor_child(struct smc_data *smc_data,
 	u32 ifc;
 	u32 cs;
 	int ret;
+	int bw;
 	const uint32_t *cs_addr;
 	uint32_t len;
 
@@ -679,8 +681,14 @@ static int smc35x_probe_nor_child(struct smc_data *smc_data,
 			child->full_name);
 		return -ENODEV;
 	}
+	if (of_property_read_u32(child, "bank-width", &bw) < 0) {
+		dev_warn(smc_data->dev, "No bank-width given for NOR - defaulting to 8bit");
+		bw = 1;
+	}
 	smc_plat_data->cs = (3 & cs);
 	smc_plat_data->ifc = (1 & ifc);
+	/* we only support 8 or 16 bit */
+	smc_plat_data->bw = (bw == 1) ? PL353_SMC_MEM_WIDTH_8 : PL353_SMC_MEM_WIDTH_16;
 	/* store chipselect address to be able to identify chip (see smc35x_xx) */
 	smc_plat_data->cs_addr = ((be32_to_cpu(*cs_addr)>>24)&0xFF);
 	smc_plat_data->of_node = child;
@@ -721,6 +729,7 @@ static int smc35x_probe_sram_child(struct smc_data *smc_data,
 	u32 ifc;
 	u32 cs;
 	int ret;
+	int bw;
 	const uint32_t *cs_addr;
 	uint32_t len;
 
@@ -743,8 +752,14 @@ static int smc35x_probe_sram_child(struct smc_data *smc_data,
 			child->full_name);
 		return -ENODEV;
 	}
+	if (of_property_read_u32(child, "bank-width", &bw) < 0) {
+		dev_warn(smc_data->dev, "No bank-width given for SRAM - defaulting to 8bit");
+		bw = 1;
+	}
 	smc_plat_data->cs = (3 & cs);
 	smc_plat_data->ifc = (1 & ifc);
+	/* we only support 8 or 16 bit */
+	smc_plat_data->bw = (bw == 1) ? PL353_SMC_MEM_WIDTH_8 : PL353_SMC_MEM_WIDTH_16;
 	/* store chipselect address to be able to identify chip (see smc35x_xx) */
 	smc_plat_data->cs_addr = ((be32_to_cpu(*cs_addr)>>24)&0xFF);
 	smc_plat_data->of_node = child;
@@ -810,6 +825,8 @@ static int smc35x_probe_nand_child(struct smc_data *smc_data,
 	}
 	smc_plat_data->cs = (0 & cs);
 	smc_plat_data->ifc = (1 & ifc);
+	/* NAND always starts at 8bit */
+	smc_plat_data->bw = PL353_SMC_MEM_WIDTH_8;
 	/* store chipselect address to be able to identify chip (see smc35x_xx) */
 	smc_plat_data->cs_addr = ((be32_to_cpu(*cs_addr)>>24)&0xFF);
 	smc_plat_data->of_node = child;
