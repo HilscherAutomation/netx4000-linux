@@ -151,6 +151,12 @@ source "drivers/net/can/mscan/Kconfig"
 
 source "drivers/net/can/sja1000/Kconfig"
 
+config CAN_RZA1
+	depends on CAN_DEV
+	tristate "RZ/A1 onchip RS-CAN controller"
+	---help---
+	  Driver for RZ/A1 onchip RS-CAN controller
+
 source "drivers/net/can/c_can/Kconfig"
 
 source "drivers/net/can/m_can/Kconfig"
