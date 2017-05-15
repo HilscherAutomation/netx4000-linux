@@ -141,7 +141,7 @@ config CAN_RZA1
 	depends on CAN_DEV
 	tristate "RZ/A1 onchip RS-CAN controller"
 	---help---
-	  Driver for RZ/A1 onchip RS-CAN controller
+	  Driver for RZ/A1 onchip RS-CAN controller and Hilscher netX4000 based platforms.
 
 source "drivers/net/can/c_can/Kconfig"
 source "drivers/net/can/cc770/Kconfig"
