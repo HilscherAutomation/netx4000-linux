@@ -109,6 +109,13 @@ config OF_OVERLAY
 	  While this option is selected automatically when needed, you can
 	  enable it manually to improve device tree unit test coverage.
 
+config OF_CONFIGFS
+	bool "Device Tree overlays ConfigFS interface"
+	select CONFIGFS_FS
+	select OF_OVERLAY
+	help
+	  Enable a simple user-space driver DT overlay interface.
+
 config OF_NUMA
 	bool
 
