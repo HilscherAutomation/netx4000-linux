@@ -624,7 +624,7 @@ static int netx4000_qspi_transfer_one(struct spi_master *master, struct spi_devi
 	void *pvTxBuf, *pvRxBuf;
 	uint32_t val32, nWords, wordSize /* in bytes */, wm;
 	unsigned long timeout, tsTransferTimeout;  /* all in jiffies */
-	int rc, nbytes;
+	int rc, nbytes = transfer->len;
 
 	set_frequency(spi, transfer);
 	set_bits_per_word(spi, transfer);
@@ -639,11 +639,15 @@ static int netx4000_qspi_transfer_one(struct spi_master *master, struct spi_devi
 #ifdef CONFIG_DMA_ENGINE
 	if ((transfer->rx_sg.nents > 0) || (transfer->tx_sg.nents > 0)) {
 		rc = netx4000_qspi_do_dma(master, transfer);
+		if (rc) {
+			dev_err(priv->dev, "%s: netx4000_qspi_do_dma() failed\n", __func__);
+			goto err_out;
+		}
+		nbytes = 0;
 	}
 #endif /* CONFIG_DMA_ENGINE */
 
 	if ((transfer->rx_sg.nents == 0) && (transfer->tx_sg.nents == 0)) {
-		nbytes = transfer->len;
 		pvTxBuf = (void*)transfer->tx_buf;
 		pvRxBuf = transfer->rx_buf;
 
@@ -873,7 +877,7 @@ static int netx4000_qspi_probe (struct platform_device *pdev)
 
 	master = spi_alloc_master(&pdev->dev, sizeof(*priv));
 	if (!master) {
-		dev_err(priv->dev, "spi_alloc_master() failed\n");
+		dev_err(&pdev->dev, "spi_alloc_master() failed\n");
 		return -ENOMEM;
 	}
 
