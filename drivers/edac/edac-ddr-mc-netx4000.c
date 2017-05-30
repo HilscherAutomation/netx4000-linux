@@ -533,7 +533,7 @@ static int netx4000_edac_ddr_mc_probe(struct platform_device *pdev)
 	struct priv_data *priv;
 	struct resource *res;
 	void __iomem *baseaddr;
-	int rc, irq, change_op_state = 0;
+	int rc, irq = 0, change_op_state = 0;
 
 	switch (edac_op_state) {
 		case EDAC_OPSTATE_INVAL:
