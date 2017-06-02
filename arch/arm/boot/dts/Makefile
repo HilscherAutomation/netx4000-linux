@@ -1303,3 +1303,8 @@ dtb-$(CONFIG_ARCH_ASPEED) += \
 	aspeed-bmc-opp-zaius.dtb \
 	aspeed-bmc-portwell-neptune.dtb \
 	aspeed-bmc-quanta-q71l.dtb
+
+# Enable symbol generation to support dt-overlays on Hilscher netX4000 based platforms.
+ifeq ($(CONFIG_ARCH_NETX4000),y)
+	DTC_FLAGS ?= -@
+endif
