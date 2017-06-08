@@ -248,11 +248,9 @@ static void netx4000_hsmmc_set_clock(struct netx4000_hsmmc_host *host)
 {
 	u32 clock_setting = 0;
 	u32 div;
-	unsigned long max = clk_get_rate(host->clk);
+	unsigned long max = host->mmc->f_max;
 	u32 clock = host->mmc->ios.clock;
 
-	//TODO:
-	max = (100 * 1000 * 1000);
 	/* do not write to clk-ctrl while SCLKDIVEN is not set */
 	while ( !(MSK_NX4000_SDIO_SD_INFO2_SCLKDIVEN & readl(&host->reg->sd_info2)) ){ndelay(1);};
 	/* disable clock */
@@ -263,7 +261,7 @@ static void netx4000_hsmmc_set_clock(struct netx4000_hsmmc_host *host)
 	} else {
 		div = 2;
 		while (div < 1024) {
-			if (clock>(max/div))
+			if ((max/div)<=clock)
 				break;
 
 			div <<= 1;
@@ -866,6 +864,7 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	mmc->max_blk_count = 8; /* No. of Blocks is 16 bits */
 	mmc->max_req_size = mmc->max_blk_size * mmc->max_blk_count;
 	mmc->max_seg_size = mmc->max_req_size;
+	mmc->f_max = clk_get_rate(of_clk_get(np,0));
 
 	mmc->caps = 0;
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED | MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE;
