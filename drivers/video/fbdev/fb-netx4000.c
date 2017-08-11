@@ -363,11 +363,6 @@ static int netx4000_fb_probe (struct platform_device *pdev)
 	struct priv_data *priv;
 	int rc;
 
-	if (netx4000_periph_clock_enable(NETX4000_GFX_CLOCK_EN)) {
-		dev_err(&pdev->dev, "netx4000_periph_clock_enable() failed\n");
-		return -EIO;
-	}
-
 	fbinfo = framebuffer_alloc(sizeof(*priv), &pdev->dev);
 	if (!fbinfo) {
 		dev_err(&pdev->dev, "framebuffer_alloc() failed\n");
@@ -386,10 +381,17 @@ static int netx4000_fb_probe (struct platform_device *pdev)
 	}
 
 	/* Read the clock source from DT */
-	priv->clk = clk_get(&pdev->dev, NULL);
+	priv->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(priv->clk)) {
 		rc = PTR_ERR(priv->clk);
 		goto err_out;
+	}
+
+	/* Enable clocks */
+	rc = clk_prepare_enable(priv->clk);
+	if (rc) {
+		dev_err(&pdev->dev, "Enabling clock failed\n");
+		return rc;
 	}
 
 	/* Read the display settings from DT */
@@ -530,9 +532,12 @@ err_out:
 static int netx4000_fb_remove(struct platform_device *pdev)
 {
 	struct fb_info *fbinfo = platform_get_drvdata(pdev);
+	struct priv_data *priv = fbinfo->par;
 
 	unregister_framebuffer(fbinfo);
 	framebuffer_release(fbinfo);
+
+	clk_disable_unprepare(priv->clk);
 
 	dev_info(&pdev->dev, "successfully removed!\n");
 
