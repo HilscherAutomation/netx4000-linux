@@ -31,14 +31,4 @@
 #define NETX4000_PRIV_PER_VIRT_BASE		NETX4000_PRIV_PER_PHYS_BASE
 #define NETX4000_PRIV_PER_SIZE			SZ_8K
 
-
-#define NETX4000_DDR_CLOCK_EN			(1 << 6)
-#define NETX4000_GFX_CLOCK_EN			(1 << 5)
-#define NETX4000_3PSW_CLOCK_EN			(1 << 4)
-#define NETX4000_GMAC_CLOCK_EN			(1 << 3)
-#define NETX4000_USB_SDIO_EN			(1 << 2)
-#define NETX4000_USB_PCIE_EN			(1 << 1)
-#define NETX4000_USB_CLOCK_EN			(1 << 0)
-int netx4000_periph_clock_enable(uint32_t mask);
-
 #endif
