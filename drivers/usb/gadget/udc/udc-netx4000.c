@@ -28,6 +28,7 @@
 #include <linux/platform_device.h>
 
 #include <linux/interrupt.h>
+#include <linux/clk.h>
 
 #include <linux/io.h>
 #include <linux/of_address.h>
@@ -203,6 +204,7 @@ struct priv_usb_ep {
 
 struct priv_data {
 	void				*ba; /* baseaddr */
+	struct clk			*clk;
 	int					irq_u2f;
 	int					irq_u2fepc;
 	spinlock_t			lock;
@@ -1281,11 +1283,6 @@ static int netx4000_udc_chip_init(struct priv_data *_pdata)
 	uint32_t n, ba=0 /* base address of internal RAM */;
 	int rc;
 
-	if (netx4000_periph_clock_enable(NETX4000_USB_CLOCK_EN)) {
-		pr_err("%s: netx4000_periph_clock_enable() failed\n", __func__);
-		return -EIO;
-	}
-
 	netx4000_usb_power_up();
 
 	/* Resetting the chip */
@@ -1386,6 +1383,19 @@ static int netx4000_udc_probe(struct platform_device *pdev)
 		return -EIO;
 	}
 
+	/* Read clock and enable it */
+	pdata->clk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(pdata->clk)) {
+		dev_err(&pdev->dev, "Getting clock failed\n");
+		return PTR_ERR(pdata->clk);
+	}
+
+	rc = clk_prepare_enable(pdata->clk);
+	if (rc) {
+		dev_err(&pdev->dev, "Enabling clock failed\n");
+		return rc;
+	}
+
 	pdev->dev.platform_data = pdata;
 	platform_set_drvdata(pdev, pdata);
 
@@ -1429,6 +1439,8 @@ static int netx4000_udc_remove(struct platform_device *pdev)
 	WARN(pdata->driver, "Error: %s is still bound by %s\n", pdata->gadget.name, pdata->driver->driver.name);
 
 	usb_del_gadget_udc(&pdata->gadget);
+
+	clk_disable_unprepare(pdata->clk);
 
 	pr_info("%s: successfully removed!\n", DRIVER_NAME);
 
