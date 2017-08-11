@@ -27,6 +27,7 @@
 #include <linux/of_platform.h>
 #include <linux/io.h>
 #include <linux/delay.h>
+#include <linux/clk.h>
 #include <linux/usb/ehci_pdriver.h>
 #include <linux/usb/ohci_pdriver.h>
 
@@ -41,6 +42,7 @@ struct netx4000_priv {
 	struct resource *res_mem; /* physical baseaddr */
 	void *ba; /* virtual baseaddr */
 	unsigned int irq;
+	struct clk *clk;
 
 	unsigned int num_ports;
 
@@ -106,10 +108,6 @@ static int netx4000_hcd_chip_init(struct netx4000_priv *priv)
 	if (priv->num_ports > 1)
 		netx4000_hcd_h2mode_enable();
 
-	if (netx4000_periph_clock_enable(NETX4000_USB_CLOCK_EN)) {
-		dev_err(&priv->pdev->dev, "netx4000_periph_clock_enable() failed\n");
-		return -EIO;
-	}
 	netx4000_hcd_power_up();
 
 	netx4000_hcd_chip_reset(priv);
@@ -269,6 +267,13 @@ static int netx4000_hcd_probe(struct platform_device *pdev)
 		goto err_out;
 	}
 
+	priv->clk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(priv->clk)) {
+		dev_err(&pdev->dev, "clock not provided in DT");
+		rc = -EINVAL;
+		goto err_out;
+	}
+
 	rc = of_property_read_u32(pdev->dev.of_node, "num-ports", &priv->num_ports);
 	if (rc) {
 		dev_warn(&pdev->dev, "num_ports not provided in DT => defaulting to one port!");
@@ -277,6 +282,13 @@ static int netx4000_hcd_probe(struct platform_device *pdev)
 	else if ((priv->num_ports < 1) || (priv->num_ports > 2)) {
 		dev_err(&pdev->dev, "num_ports out of range [1,2]");
 		rc = -EINVAL;
+		goto err_out;
+	}
+
+	/* Enable clocks */
+	rc = clk_prepare_enable(priv->clk);
+	if (rc) {
+		dev_err(&pdev->dev, "Error enabling clock");
 		goto err_out;
 	}
 
@@ -338,6 +350,9 @@ static int netx4000_hcd_remove(struct platform_device *pdev)
 	ioset32(MSK_NX4000_USB_HOST_USBCTR_PLL_RST | MSK_NX4000_USB_HOST_USBCTR_USBH_RST, (void*)&chip->ulUSB_HOST_USBCTR);
 
 	netx4000_hcd_power_down();
+
+	/* Disable clocks */
+	clk_disable_unprepare(priv->clk);
 
 	dev_info(&pdev->dev, "successfully removed!\n");
 	
