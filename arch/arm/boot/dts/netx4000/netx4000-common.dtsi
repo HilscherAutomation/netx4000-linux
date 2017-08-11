@@ -135,17 +135,49 @@
 			clock-output-names = "periph_clk","apb_pclk";
 			clock-frequency = <(100 * 1000 * 1000)>;
 		};
-		clk200_eth_gmac: clk200_eth_gmac {
-			compatible = "fixed-clock";
+
+		/* Gated clocks */
+		usb_clk: usb_clk {
+			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
-			clock-output-names = "clk200_eth_gmac";
-			clock-frequency = <(200 * 1000 * 1000)>;
+			clock-output-names = "usb_clk";
+			clock-frequency = <(100 * 1000 * 1000)>;
+			clock-mask = <0x01>;
 		};
-		pll2_clk: pll2_clk {
-			compatible = "fixed-clock";
+		pcie_clk: pcie_clk {
+			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
-			clock-output-names = "pll2_clk";
+			clock-output-names = "pcie_clk";
+			clock-frequency = <(133 * 1000 * 1000)>;
+			clock-mask = <0x02>;
+		};
+		sdio_clk: sdio_clk {
+			compatible = "hilscher,netx4000-periph-clock";
+			#clock-cells = <0>;
+			clock-output-names = "sdio_clk";
+			clock-frequency = <(100 * 1000 * 1000)>;
+			clock-mask = <0x04>;
+		};
+		gmac_clk: gmac_clk {
+			compatible = "hilscher,netx4000-periph-clock";
+			#clock-cells = <0>;
+			clock-output-names = "gmac_clk";
+			clock-frequency = <(200 * 1000 * 1000)>;
+			clock-mask = <0x08>;
+		};
+		switch_clk: switch_clk {
+			compatible = "hilscher,netx4000-periph-clock";
+			#clock-cells = <0>;
+			clock-output-names = "switch_clk";
+			clock-frequency = <(200 * 1000 * 1000)>;
+			clock-mask = <0x10>;
+		};
+		gfx_clk: gfx_clk {
+			compatible = "hilscher,netx4000-periph-clock";
+			#clock-cells = <0>;
+			clock-output-names = "gfx_clk";
 			clock-frequency = <(1*1000*1000*1000)>;
+			clock-mask = <0x20>;
 		};
 	};
 
@@ -462,7 +494,7 @@
 			compatible = "hilscher,netx4000-hcd";
 			reg = <0xf9000000 0x20000>;
 			interrupts = <GIC_SPI (177-32) IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&periph_clk>;
+			clocks = <&usb_clk>;
 		};
 
 		udc0: usb-device@f8004000 {
@@ -472,7 +504,7 @@
 			interrupts = <GIC_SPI (178-32) IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI (179-32) IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "irq_u2f", "irq_u2fepc";
 
-			clocks = <&periph_clk>;
+			clocks = <&usb_clk>;
 		};
 
 		/* CAN */
@@ -516,7 +548,7 @@
 			pinctrl-0 = <&gmac0_mdio_pins &rgmii0_pins>;
 			compatible = "snps,dwc-qos-ethernet-4.10", "hilscher,netx4000-gmac";
 			reg = <0xf8010000 0x4000>;
-			clocks = <&clk200_eth_gmac>, <&clk200_eth_gmac>;
+			clocks = <&gmac_clk>, <&gmac_clk>;
 			clock-names = "apb_pclk", "phy_ref_clk"; /* phy_ref_clk is unused/unsupported at 'nxhx4000 jtag plus' board */
 			interrupts = <GIC_SPI (106-32) IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI (107-32) IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "macirq", "eth_wake_irq";
@@ -528,7 +560,7 @@
 			pinctrl-0 = <&rgmii1_pins>;
 			compatible = "snps,dwc-qos-ethernet-4.10", "hilscher,netx4000-gmac";
 			reg = <0xf8014000 0x4000>;
-			clocks = <&clk200_eth_gmac>, <&clk200_eth_gmac>;
+			clocks = <&gmac_clk>, <&gmac_clk>;
 			clock-names = "apb_pclk", "phy_ref_clk"; /* phy_ref_clk is unused/unsupported at 'nxhx4000 jtag plus' board */
 			interrupts = <GIC_SPI (108-32) IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI (109-32) IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "macirq", "eth_wake_irq";
@@ -540,7 +572,7 @@
 			status = "disabled";
 			compatible = "hilscher,fb-netx4000";
 			reg = <0xf803c000 0x400>;
-			clocks = <&pll2_clk>;
+			clocks = <&gfx_clk>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pvo_rgb888_pins>;
 			interrupts = <GIC_SPI (90-32) IRQ_TYPE_LEVEL_HIGH>,
@@ -579,7 +611,7 @@
 			card-detect-delay = <100>;
 			voltage-ranges = <3300 3300>;
 			bus-width = <4>;
-			clocks = <&periph_clk>;
+			clocks = <&sdio_clk>;
 			dmas = <
 				&dmac1 0 (NBPF_SLAVE_RQ_HIGH | NBPF_SLAVE_RQ_LEVEL)  /* read channel */
 				&dmac1 1 (NBPF_SLAVE_RQ_HIGH | NBPF_SLAVE_RQ_LEVEL)  /* write channel */

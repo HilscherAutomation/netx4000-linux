@@ -118,8 +118,6 @@ struct netx4000_hsmmc_host {
 	struct	mmc_command			*cmd;
 	struct	mmc_data			*data;
 	struct	clk				*clk;
-	struct	clk				*fclk;
-	struct	clk				*dbclk;
 	struct netx4000_sdio_reg		*reg;
 	spinlock_t				irq_lock; /* Prevent races with irq handler */
 	int					irq[2];
@@ -832,9 +830,8 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	int ret, irq_cd,irq_access;
 	void __iomem *base;
 	struct device_node *np = pdev->dev.of_node;
+	struct clk* clk;
         
-        netx4000_periph_clock_enable(NETX4000_USB_SDIO_EN);
-
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
 	irq_cd = platform_get_irq_byname(pdev, "card");
@@ -845,6 +842,16 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
+
+	clk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(clk))
+		return PTR_ERR(base);
+
+	ret = clk_prepare_enable(clk);
+	if (ret) {
+	    dev_err(&pdev->dev, "Error enabling clock.\n");
+	    return ret;
+	}
 
 	mmc = mmc_alloc_host(sizeof(struct netx4000_hsmmc_host), &pdev->dev);
 	if (!mmc) {
@@ -864,13 +871,14 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	mmc->max_blk_count = 8; /* No. of Blocks is 16 bits */
 	mmc->max_req_size = mmc->max_blk_size * mmc->max_blk_count;
 	mmc->max_seg_size = mmc->max_req_size;
-	mmc->f_max = clk_get_rate(of_clk_get(np,0));
+	mmc->f_max = clk_get_rate(clk);
 
 	mmc->caps = 0;
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED | MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE;
 	mmc->caps |= MMC_CAP_4_BIT_DATA | MMC_CAP_HW_RESET;
 
 	host		= mmc_priv(mmc);
+	host->clk	= clk;
 	host->mmc	= mmc;
 	host->pdata	= pdata;
 	host->dev	= &pdev->dev;
@@ -942,8 +950,8 @@ skip_dma:
 
 	return 0;
 err_irq:
-	if (host->dbclk)
-		clk_disable_unprepare(host->dbclk);
+	if (host->clk)
+		clk_disable_unprepare(host->clk);
 	if (!IS_ERR(host->tx_chan))
 		dma_release_channel(host->tx_chan);
 	if (!IS_ERR(host->rx_chan))
@@ -965,8 +973,8 @@ static int netx4000_hsmmc_remove(struct platform_device *pdev)
 
 	mmc_remove_host(host->mmc);
 
-	if (host->dbclk)
-		clk_disable_unprepare(host->dbclk);
+	if (host->clk)
+		clk_disable_unprepare(host->clk);
 
 	mmc_free_host(host->mmc);
 
