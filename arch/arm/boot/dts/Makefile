@@ -1080,4 +1080,5 @@ clean-files	:= *.dtb
 # Enable symbol generation to support dt-overlays on Hilscher netX4000 based platforms.
 ifeq ($(CONFIG_ARCH_NETX4000),y)
 	DTC_FLAGS ?= -@
+	subdir-y = netx4000/overlays
 endif
