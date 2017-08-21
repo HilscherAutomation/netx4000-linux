@@ -241,6 +241,11 @@ static int netx4000_gpio_probe(struct platform_device *pdev)
 	netx4000_gc->chip.gc.owner		= THIS_MODULE;
 	netx4000_gc->chip.gc.parent		= &pdev->dev;
 
+	if (of_property_read_bool(node, "gpio-ranges")) {
+		netx4000_gc->chip.gc.request = gpiochip_generic_request;
+		netx4000_gc->chip.gc.free = gpiochip_generic_free;
+	}
+
 	ret = of_mm_gpiochip_add(node, &netx4000_gc->chip);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed adding memory mapped gpiochip\n");
