@@ -402,6 +402,7 @@ static const struct pinmux_ops pcs_pinmux_ops = {
 	.get_function_groups = pinmux_generic_get_function_groups,
 	.set_mux = pcs_set_mux,
 	.gpio_request_enable = pcs_request_gpio,
+	.strict = true,
 };
 
 /* Clear BIAS value */
