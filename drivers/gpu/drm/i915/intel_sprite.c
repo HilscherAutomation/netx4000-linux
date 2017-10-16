@@ -35,6 +35,7 @@
 #include <drm/drm_rect.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_plane_helper.h>
+#include <linux/locallock.h>
 #include "intel_drv.h"
 #include "intel_frontbuffer.h"
 #include <drm/i915_drm.h>
@@ -65,6 +66,8 @@ int intel_usecs_to_scanlines(const struct drm_display_mode *adjusted_mode,
 			    1000 * adjusted_mode->crtc_htotal);
 }
 
+static DEFINE_LOCAL_IRQ_LOCK(pipe_update_lock);
+
 /**
  * intel_pipe_update_start() - start update of a set of display registers
  * @crtc: the crtc of which the registers are going to be updated
@@ -81,10 +84,13 @@ int intel_usecs_to_scanlines(const struct drm_display_mode *adjusted_mode,
  */
 void intel_pipe_update_start(struct intel_crtc *crtc)
 {
+	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 	const struct drm_display_mode *adjusted_mode = &crtc->config->base.adjusted_mode;
 	long timeout = msecs_to_jiffies_timeout(1);
 	int scanline, min, max, vblank_start;
 	wait_queue_head_t *wq = drm_crtc_vblank_waitqueue(&crtc->base);
+	bool need_vlv_dsi_wa = (IS_VALLEYVIEW(dev_priv) || IS_CHERRYVIEW(dev_priv)) &&
+		intel_crtc_has_type(crtc->config, INTEL_OUTPUT_DSI);
 	DEFINE_WAIT(wait);
 
 	vblank_start = adjusted_mode->crtc_vblank_start;
@@ -95,7 +101,7 @@ void intel_pipe_update_start(struct intel_crtc *crtc)
 	min = vblank_start - intel_usecs_to_scanlines(adjusted_mode, 100);
 	max = vblank_start - 1;
 
-	local_irq_disable();
+	local_lock_irq(pipe_update_lock);
 
 	if (min <= 0 || max <= 0)
 		return;
@@ -125,16 +131,34 @@ void intel_pipe_update_start(struct intel_crtc *crtc)
 			break;
 		}
 
-		local_irq_enable();
+		local_unlock_irq(pipe_update_lock);
 
 		timeout = schedule_timeout(timeout);
 
-		local_irq_disable();
+		local_lock_irq(pipe_update_lock);
 	}
 
 	finish_wait(wq, &wait);
 
 	drm_crtc_vblank_put(&crtc->base);
+
+	/*
+	 * On VLV/CHV DSI the scanline counter would appear to
+	 * increment approx. 1/3 of a scanline before start of vblank.
+	 * The registers still get latched at start of vblank however.
+	 * This means we must not write any registers on the first
+	 * line of vblank (since not the whole line is actually in
+	 * vblank). And unfortunately we can't use the interrupt to
+	 * wait here since it will fire too soon. We could use the
+	 * frame start interrupt instead since it will fire after the
+	 * critical scanline, but that would require more changes
+	 * in the interrupt code. So for now we'll just do the nasty
+	 * thing and poll for the bad scanline to pass us by.
+	 *
+	 * FIXME figure out if BXT+ DSI suffers from this as well
+	 */
+	while (need_vlv_dsi_wa && scanline == vblank_start)
+		scanline = intel_get_crtc_scanline(crtc);
 
 	crtc->debug.scanline_start = scanline;
 	crtc->debug.start_vbl_time = ktime_get();
@@ -181,7 +205,7 @@ void intel_pipe_update_end(struct intel_crtc *crtc, struct intel_flip_work *work
 		crtc->base.state->event = NULL;
 	}
 
-	local_irq_enable();
+	local_unlock_irq(pipe_update_lock);
 
 	if (crtc->debug.start_vbl_count &&
 	    crtc->debug.start_vbl_count != end_vbl_count) {

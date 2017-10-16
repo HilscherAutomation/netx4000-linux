@@ -396,7 +396,19 @@ typedef enum rx_handler_result rx_handler_result_t;
 typedef rx_handler_result_t rx_handler_func_t(struct sk_buff **pskb);
 
 void __napi_schedule(struct napi_struct *n);
+
+/*
+ * When PREEMPT_RT_FULL is defined, all device interrupt handlers
+ * run as threads, and they can also be preempted (without PREEMPT_RT
+ * interrupt threads can not be preempted). Which means that calling
+ * __napi_schedule_irqoff() from an interrupt handler can be preempted
+ * and can corrupt the napi->poll_list.
+ */
+#ifdef CONFIG_PREEMPT_RT_FULL
+#define __napi_schedule_irqoff(n) __napi_schedule(n)
+#else
 void __napi_schedule_irqoff(struct napi_struct *n);
+#endif
 
 static inline bool napi_disable_pending(struct napi_struct *n)
 {
@@ -865,11 +877,15 @@ struct netdev_xdp {
  *	of useless work if you return NETDEV_TX_BUSY.
  *	Required; cannot be NULL.
  *
- * netdev_features_t (*ndo_fix_features)(struct net_device *dev,
- *		netdev_features_t features);
- *	Adjusts the requested feature flags according to device-specific
- *	constraints, and returns the resulting flags. Must not modify
- *	the device state.
+ * netdev_features_t (*ndo_features_check)(struct sk_buff *skb,
+ *					   struct net_device *dev
+ *					   netdev_features_t features);
+ *	Called by core transmit path to determine if device is capable of
+ *	performing offload operations on a given packet. This is to give
+ *	the device an opportunity to implement any restrictions that cannot
+ *	be otherwise expressed by feature flags. The check is called with
+ *	the set of features that the stack has calculated and it returns
+ *	those the driver believes to be appropriate.
  *
  * u16 (*ndo_select_queue)(struct net_device *dev, struct sk_buff *skb,
  *                         void *accel_priv, select_queue_fallback_t fallback);
@@ -1027,6 +1043,12 @@ struct netdev_xdp {
  *	Called to release previously enslaved netdev.
  *
  *      Feature/offload setting functions.
+ * netdev_features_t (*ndo_fix_features)(struct net_device *dev,
+ *		netdev_features_t features);
+ *	Adjusts the requested feature flags according to device-specific
+ *	constraints, and returns the resulting flags. Must not modify
+ *	the device state.
+ *
  * int (*ndo_set_features)(struct net_device *dev, netdev_features_t features);
  *	Called to update device configuration to new features. Passed
  *	feature set might be less than what was returned by ndo_fix_features()).
@@ -1099,15 +1121,6 @@ struct netdev_xdp {
  *	Callback to use for xmit over the accelerated station. This
  *	is used in place of ndo_start_xmit on accelerated net
  *	devices.
- * netdev_features_t (*ndo_features_check)(struct sk_buff *skb,
- *					   struct net_device *dev
- *					   netdev_features_t features);
- *	Called by core transmit path to determine if device is capable of
- *	performing offload operations on a given packet. This is to give
- *	the device an opportunity to implement any restrictions that cannot
- *	be otherwise expressed by feature flags. The check is called with
- *	the set of features that the stack has calculated and it returns
- *	those the driver believes to be appropriate.
  * int (*ndo_set_tx_maxrate)(struct net_device *dev,
  *			     int queue_index, u32 maxrate);
  *	Called when a user wants to set a max-rate limitation of specific
@@ -2463,13 +2476,52 @@ void netdev_freemem(struct net_device *dev);
 void synchronize_net(void);
 int init_dummy_netdev(struct net_device *dev);
 
-DECLARE_PER_CPU(int, xmit_recursion);
 #define XMIT_RECURSION_LIMIT	10
+#ifdef CONFIG_PREEMPT_RT_FULL
+static inline int dev_recursion_level(void)
+{
+	return current->xmit_recursion;
+}
+
+static inline int xmit_rec_read(void)
+{
+	return current->xmit_recursion;
+}
+
+static inline void xmit_rec_inc(void)
+{
+	current->xmit_recursion++;
+}
+
+static inline void xmit_rec_dec(void)
+{
+	current->xmit_recursion--;
+}
+
+#else
+
+DECLARE_PER_CPU(int, xmit_recursion);
 
 static inline int dev_recursion_level(void)
 {
 	return this_cpu_read(xmit_recursion);
 }
+
+static inline int xmit_rec_read(void)
+{
+	return __this_cpu_read(xmit_recursion);
+}
+
+static inline void xmit_rec_inc(void)
+{
+	__this_cpu_inc(xmit_recursion);
+}
+
+static inline void xmit_rec_dec(void)
+{
+	__this_cpu_dec(xmit_recursion);
+}
+#endif
 
 struct net_device *dev_get_by_index(struct net *net, int ifindex);
 struct net_device *__dev_get_by_index(struct net *net, int ifindex);
@@ -2855,6 +2907,7 @@ struct softnet_data {
 	unsigned int		dropped;
 	struct sk_buff_head	input_pkt_queue;
 	struct napi_struct	backlog;
+	struct sk_buff_head	tofree_queue;
 
 };
 

@@ -3518,7 +3518,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	ideal_runtime = sched_slice(cfs_rq, curr);
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
 	if (delta_exec > ideal_runtime) {
-		resched_curr(rq_of(cfs_rq));
+		resched_curr_lazy(rq_of(cfs_rq));
 		/*
 		 * The current task ran long enough, ensure it doesn't get
 		 * re-elected due to buddy favours.
@@ -3542,7 +3542,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 		return;
 
 	if (delta > ideal_runtime)
-		resched_curr(rq_of(cfs_rq));
+		resched_curr_lazy(rq_of(cfs_rq));
 }
 
 static void
@@ -3684,7 +3684,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 	 * validating it and just reschedule.
 	 */
 	if (queued) {
-		resched_curr(rq_of(cfs_rq));
+		resched_curr_lazy(rq_of(cfs_rq));
 		return;
 	}
 	/*
@@ -3866,7 +3866,7 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
 	 * hierarchy can be throttled
 	 */
 	if (!assign_cfs_rq_runtime(cfs_rq) && likely(cfs_rq->curr))
-		resched_curr(rq_of(cfs_rq));
+		resched_curr_lazy(rq_of(cfs_rq));
 }
 
 static __always_inline
@@ -4494,7 +4494,7 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
 
 		if (delta < 0) {
 			if (rq->curr == p)
-				resched_curr(rq);
+				resched_curr_lazy(rq);
 			return;
 		}
 		hrtick_start(rq, delta);
@@ -5310,43 +5310,6 @@ find_idlest_cpu(struct sched_group *group, struct task_struct *p, int this_cpu)
 	return shallowest_idle_cpu != -1 ? shallowest_idle_cpu : least_loaded_cpu;
 }
 
-/*
- * Implement a for_each_cpu() variant that starts the scan at a given cpu
- * (@start), and wraps around.
- *
- * This is used to scan for idle CPUs; such that not all CPUs looking for an
- * idle CPU find the same CPU. The down-side is that tasks tend to cycle
- * through the LLC domain.
- *
- * Especially tbench is found sensitive to this.
- */
-
-static int cpumask_next_wrap(int n, const struct cpumask *mask, int start, int *wrapped)
-{
-	int next;
-
-again:
-	next = find_next_bit(cpumask_bits(mask), nr_cpumask_bits, n+1);
-
-	if (*wrapped) {
-		if (next >= start)
-			return nr_cpumask_bits;
-	} else {
-		if (next >= nr_cpumask_bits) {
-			*wrapped = 1;
-			n = -1;
-			goto again;
-		}
-	}
-
-	return next;
-}
-
-#define for_each_cpu_wrap(cpu, mask, start, wrap)				\
-	for ((wrap) = 0, (cpu) = (start)-1;					\
-		(cpu) = cpumask_next_wrap((cpu), (mask), (start), &(wrap)),	\
-		(cpu) < nr_cpumask_bits; )
-
 #ifdef CONFIG_SCHED_SMT
 
 static inline void set_idle_cores(int cpu, int val)
@@ -5376,7 +5339,7 @@ static inline bool test_idle_cores(int cpu, bool def)
  * Since SMT siblings share all cache levels, inspecting this limited remote
  * state should be fairly cheap.
  */
-void __update_idle_core(struct rq *rq)
+void update_idle_core(struct rq *rq)
 {
 	int core = cpu_of(rq);
 	int cpu;
@@ -5406,17 +5369,14 @@ unlock:
 static int select_idle_core(struct task_struct *p, struct sched_domain *sd, int target)
 {
 	struct cpumask *cpus = this_cpu_cpumask_var_ptr(select_idle_mask);
-	int core, cpu, wrap;
-
-	if (!static_branch_likely(&sched_smt_present))
-		return -1;
+	int core, cpu;
 
 	if (!test_idle_cores(target, false))
 		return -1;
 
 	cpumask_and(cpus, sched_domain_span(sd), tsk_cpus_allowed(p));
 
-	for_each_cpu_wrap(core, cpus, target, wrap) {
+	for_each_cpu_wrap(core, cpus, target) {
 		bool idle = true;
 
 		for_each_cpu(cpu, cpu_smt_mask(core)) {
@@ -5443,9 +5403,6 @@ static int select_idle_core(struct task_struct *p, struct sched_domain *sd, int 
 static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int target)
 {
 	int cpu;
-
-	if (!static_branch_likely(&sched_smt_present))
-		return -1;
 
 	for_each_cpu(cpu, cpu_smt_mask(target)) {
 		if (!cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
@@ -5482,7 +5439,7 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, int t
 	u64 avg_cost, avg_idle = this_rq()->avg_idle;
 	u64 time, cost;
 	s64 delta;
-	int cpu, wrap;
+	int cpu;
 
 	this_sd = rcu_dereference(*this_cpu_ptr(&sd_llc));
 	if (!this_sd)
@@ -5499,7 +5456,7 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, int t
 
 	time = local_clock();
 
-	for_each_cpu_wrap(cpu, sched_domain_span(sd), target, wrap) {
+	for_each_cpu_wrap(cpu, sched_domain_span(sd), target) {
 		if (!cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
 			continue;
 		if (idle_cpu(cpu))
@@ -5905,7 +5862,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	return;
 
 preempt:
-	resched_curr(rq);
+	resched_curr_lazy(rq);
 	/*
 	 * Only set the backward buddy when the current task is still
 	 * on the rq. This can happen when a wakeup gets interleaved
@@ -8631,7 +8588,7 @@ static void task_fork_fair(struct task_struct *p)
 		 * 'current' within the tree based on its new key value.
 		 */
 		swap(curr->vruntime, se->vruntime);
-		resched_curr(rq);
+		resched_curr_lazy(rq);
 	}
 
 	se->vruntime -= cfs_rq->min_vruntime;
@@ -8655,7 +8612,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
 	 */
 	if (rq->curr == p) {
 		if (p->prio > oldprio)
-			resched_curr(rq);
+			resched_curr_lazy(rq);
 	} else
 		check_preempt_curr(rq, p, 0);
 }

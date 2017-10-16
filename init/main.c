@@ -507,6 +507,7 @@ asmlinkage __visible void __init start_kernel(void)
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
 	setup_per_cpu_areas();
+	softirq_early_init();
 	boot_cpu_state_init();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
@@ -868,7 +869,6 @@ static void __init do_basic_setup(void)
 	do_ctors();
 	usermodehelper_enable();
 	do_initcalls();
-	random_int_secret_init();
 }
 
 static void __init do_pre_smp_initcalls(void)

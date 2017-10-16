@@ -31,6 +31,7 @@
 
 	.text
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 _GLOBAL(call_do_softirq)
 	mflr	r0
 	std	r0,16(r1)
@@ -41,6 +42,7 @@ _GLOBAL(call_do_softirq)
 	ld	r0,16(r1)
 	mtlr	r0
 	blr
+#endif
 
 _GLOBAL(call_do_irq)
 	mflr	r0
@@ -67,7 +69,7 @@ PPC64_CACHES:
  *   flush all bytes from start through stop-1 inclusive
  */
 
-_GLOBAL(flush_icache_range)
+_GLOBAL_TOC(flush_icache_range)
 BEGIN_FTR_SECTION
 	PURGE_PREFETCHED_INS
 	blr
@@ -120,7 +122,7 @@ EXPORT_SYMBOL(flush_icache_range)
  *
  *    flush all bytes from start to stop-1 inclusive
  */
-_GLOBAL(flush_dcache_range)
+_GLOBAL_TOC(flush_dcache_range)
 
 /*
  * Flush the data cache to memory 

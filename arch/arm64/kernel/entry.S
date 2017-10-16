@@ -30,6 +30,7 @@
 #include <asm/irq.h>
 #include <asm/memory.h>
 #include <asm/thread_info.h>
+#include <asm/asm-uaccess.h>
 #include <asm/unistd.h>
 
 /*
@@ -369,12 +370,13 @@ el1_da:
 	/*
 	 * Data abort handling
 	 */
-	mrs	x0, far_el1
+	mrs	x3, far_el1
 	enable_dbg
 	// re-enable interrupts if they were enabled in the aborted context
 	tbnz	x23, #7, 1f			// PSR_I_BIT
 	enable_irq
 1:
+	clear_address_tag x0, x3
 	mov	x2, sp				// struct pt_regs
 	bl	do_mem_abort
 
@@ -428,11 +430,16 @@ el1_irq:
 
 #ifdef CONFIG_PREEMPT
 	ldr	w24, [tsk, #TI_PREEMPT]		// get preempt count
-	cbnz	w24, 1f				// preempt count != 0
+	cbnz	w24, 2f				// preempt count != 0
 	ldr	x0, [tsk, #TI_FLAGS]		// get flags
-	tbz	x0, #TIF_NEED_RESCHED, 1f	// needs rescheduling?
-	bl	el1_preempt
+	tbnz	x0, #TIF_NEED_RESCHED, 1f	// needs rescheduling?
+
+	ldr	w24, [tsk, #TI_PREEMPT_LAZY]	// get preempt lazy count
+	cbnz	w24, 2f				// preempt lazy count != 0
+	tbz	x0, #TIF_NEED_RESCHED_LAZY, 2f	// needs rescheduling?
 1:
+	bl	el1_preempt
+2:
 #endif
 #ifdef CONFIG_TRACE_IRQFLAGS
 	bl	trace_hardirqs_on
@@ -446,6 +453,7 @@ el1_preempt:
 1:	bl	preempt_schedule_irq		// irq en/disable is done inside
 	ldr	x0, [tsk, #TI_FLAGS]		// get new tasks TI_FLAGS
 	tbnz	x0, #TIF_NEED_RESCHED, 1b	// needs rescheduling?
+	tbnz	x0, #TIF_NEED_RESCHED_LAZY, 1b	// needs rescheduling?
 	ret	x24
 #endif
 
@@ -535,7 +543,7 @@ el0_da:
 	// enable interrupts before calling the main handler
 	enable_dbg_and_irq
 	ct_user_exit
-	bic	x0, x26, #(0xff << 56)
+	clear_address_tag x0, x26
 	mov	x1, x25
 	mov	x2, sp
 	bl	do_mem_abort

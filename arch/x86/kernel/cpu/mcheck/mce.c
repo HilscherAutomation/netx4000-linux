@@ -41,6 +41,8 @@
 #include <linux/debugfs.h>
 #include <linux/irq_work.h>
 #include <linux/export.h>
+#include <linux/jiffies.h>
+#include <linux/swork.h>
 #include <linux/jump_label.h>
 
 #include <asm/processor.h>
@@ -120,7 +122,7 @@ static void (*quirk_no_way_out)(int bank, struct mce *m, struct pt_regs *regs);
  * CPU/chipset specific EDAC code can register a notifier call here to print
  * MCE errors in a human-readable form.
  */
-ATOMIC_NOTIFIER_HEAD(x86_mce_decoder_chain);
+BLOCKING_NOTIFIER_HEAD(x86_mce_decoder_chain);
 
 /* Do initial initialization of a struct mce */
 void mce_setup(struct mce *m)
@@ -213,13 +215,13 @@ void mce_register_decode_chain(struct notifier_block *nb)
 	if (nb != &mce_srao_nb && nb->priority == INT_MAX)
 		nb->priority -= 1;
 
-	atomic_notifier_chain_register(&x86_mce_decoder_chain, nb);
+	blocking_notifier_chain_register(&x86_mce_decoder_chain, nb);
 }
 EXPORT_SYMBOL_GPL(mce_register_decode_chain);
 
 void mce_unregister_decode_chain(struct notifier_block *nb)
 {
-	atomic_notifier_chain_unregister(&x86_mce_decoder_chain, nb);
+	blocking_notifier_chain_unregister(&x86_mce_decoder_chain, nb);
 }
 EXPORT_SYMBOL_GPL(mce_unregister_decode_chain);
 
@@ -272,8 +274,6 @@ struct mca_msr_regs msr_ops = {
 
 static void print_mce(struct mce *m)
 {
-	int ret = 0;
-
 	pr_emerg(HW_ERR "CPU %d: Machine Check Exception: %Lx Bank %d: %016Lx\n",
 	       m->extcpu, m->mcgstatus, m->bank, m->status);
 
@@ -308,14 +308,6 @@ static void print_mce(struct mce *m)
 	pr_emerg(HW_ERR "PROCESSOR %u:%x TIME %llu SOCKET %u APIC %x microcode %x\n",
 		m->cpuvendor, m->cpuid, m->time, m->socketid, m->apicid,
 		cpu_data(m->extcpu).microcode);
-
-	/*
-	 * Print out human-readable details about the MCE error,
-	 * (if the CPU has an implementation for that)
-	 */
-	ret = atomic_notifier_call_chain(&x86_mce_decoder_chain, 0, m);
-	if (ret == NOTIFY_STOP)
-		return;
 
 	pr_emerg_ratelimited(HW_ERR "Run the above through 'mcelog --ascii'\n");
 }
@@ -608,16 +600,14 @@ static void mce_read_aux(struct mce *m, int i)
 	}
 }
 
-static bool memory_error(struct mce *m)
+bool mce_is_memory_error(struct mce *m)
 {
-	struct cpuinfo_x86 *c = &boot_cpu_data;
-
-	if (c->x86_vendor == X86_VENDOR_AMD) {
+	if (m->cpuvendor == X86_VENDOR_AMD) {
 		/* ErrCodeExt[20:16] */
 		u8 xec = (m->status >> 16) & 0x1f;
 
 		return (xec == 0x0 || xec == 0x8);
-	} else if (c->x86_vendor == X86_VENDOR_INTEL) {
+	} else if (m->cpuvendor == X86_VENDOR_INTEL) {
 		/*
 		 * Intel SDM Volume 3B - 15.9.2 Compound Error Codes
 		 *
@@ -638,6 +628,7 @@ static bool memory_error(struct mce *m)
 
 	return false;
 }
+EXPORT_SYMBOL_GPL(mce_is_memory_error);
 
 DEFINE_PER_CPU(unsigned, mce_poll_count);
 
@@ -701,7 +692,7 @@ bool machine_check_poll(enum mcp_flags flags, mce_banks_t *b)
 
 		severity = mce_severity(&m, mca_cfg.tolerant, NULL, false);
 
-		if (severity == MCE_DEFERRED_SEVERITY && memory_error(&m))
+		if (severity == MCE_DEFERRED_SEVERITY && mce_is_memory_error(&m))
 			if (m.status & MCI_STATUS_ADDRV)
 				m.severity = severity;
 
@@ -1317,7 +1308,7 @@ void mce_log_therm_throt_event(__u64 status)
 static unsigned long check_interval = INITIAL_CHECK_INTERVAL;
 
 static DEFINE_PER_CPU(unsigned long, mce_next_interval); /* in jiffies */
-static DEFINE_PER_CPU(struct timer_list, mce_timer);
+static DEFINE_PER_CPU(struct hrtimer, mce_timer);
 
 static unsigned long mce_adjust_timer_default(unsigned long interval)
 {
@@ -1326,31 +1317,17 @@ static unsigned long mce_adjust_timer_default(unsigned long interval)
 
 static unsigned long (*mce_adjust_timer)(unsigned long interval) = mce_adjust_timer_default;
 
-static void __restart_timer(struct timer_list *t, unsigned long interval)
+static enum hrtimer_restart __restart_timer(struct hrtimer *timer, unsigned long interval)
 {
-	unsigned long when = jiffies + interval;
-	unsigned long flags;
-
-	local_irq_save(flags);
-
-	if (timer_pending(t)) {
-		if (time_before(when, t->expires))
-			mod_timer(t, when);
-	} else {
-		t->expires = round_jiffies(when);
-		add_timer_on(t, smp_processor_id());
-	}
-
-	local_irq_restore(flags);
+	if (!interval)
+		return HRTIMER_NORESTART;
+	hrtimer_forward_now(timer, ns_to_ktime(jiffies_to_nsecs(interval)));
+	return HRTIMER_RESTART;
 }
 
-static void mce_timer_fn(unsigned long data)
+static enum hrtimer_restart mce_timer_fn(struct hrtimer *timer)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
-	int cpu = smp_processor_id();
 	unsigned long iv;
-
-	WARN_ON(cpu != data);
 
 	iv = __this_cpu_read(mce_next_interval);
 
@@ -1374,7 +1351,7 @@ static void mce_timer_fn(unsigned long data)
 
 done:
 	__this_cpu_write(mce_next_interval, iv);
-	__restart_timer(t, iv);
+	return __restart_timer(timer, iv);
 }
 
 /*
@@ -1382,7 +1359,7 @@ done:
  */
 void mce_timer_kick(unsigned long interval)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
+	struct hrtimer *t = this_cpu_ptr(&mce_timer);
 	unsigned long iv = __this_cpu_read(mce_next_interval);
 
 	__restart_timer(t, interval);
@@ -1397,7 +1374,7 @@ static void mce_timer_delete_all(void)
 	int cpu;
 
 	for_each_online_cpu(cpu)
-		del_timer_sync(&per_cpu(mce_timer, cpu));
+		hrtimer_cancel(&per_cpu(mce_timer, cpu));
 }
 
 static void mce_do_trigger(struct work_struct *work)
@@ -1407,6 +1384,56 @@ static void mce_do_trigger(struct work_struct *work)
 
 static DECLARE_WORK(mce_trigger_work, mce_do_trigger);
 
+static void __mce_notify_work(struct swork_event *event)
+{
+	/* Not more than two messages every minute */
+	static DEFINE_RATELIMIT_STATE(ratelimit, 60*HZ, 2);
+
+	/* wake processes polling /dev/mcelog */
+	wake_up_interruptible(&mce_chrdev_wait);
+
+	/*
+	 * There is no risk of missing notifications because
+	 * work_pending is always cleared before the function is
+	 * executed.
+	 */
+	if (mce_helper[0] && !work_pending(&mce_trigger_work))
+		schedule_work(&mce_trigger_work);
+
+	if (__ratelimit(&ratelimit))
+		pr_info(HW_ERR "Machine check events logged\n");
+}
+
+#ifdef CONFIG_PREEMPT_RT_FULL
+static bool notify_work_ready __read_mostly;
+static struct swork_event notify_work;
+
+static int mce_notify_work_init(void)
+{
+	int err;
+
+	err = swork_get();
+	if (err)
+		return err;
+
+	INIT_SWORK(&notify_work, __mce_notify_work);
+	notify_work_ready = true;
+	return 0;
+}
+
+static void mce_notify_work(void)
+{
+	if (notify_work_ready)
+		swork_queue(&notify_work);
+}
+#else
+static void mce_notify_work(void)
+{
+	__mce_notify_work(NULL);
+}
+static inline int mce_notify_work_init(void) { return 0; }
+#endif
+
 /*
  * Notify the user(s) about new machine check events.
  * Can be called from interrupt context, but not from machine check/NMI
@@ -1414,19 +1441,8 @@ static DECLARE_WORK(mce_trigger_work, mce_do_trigger);
  */
 int mce_notify_irq(void)
 {
-	/* Not more than two messages every minute */
-	static DEFINE_RATELIMIT_STATE(ratelimit, 60*HZ, 2);
-
 	if (test_and_clear_bit(0, &mce_need_notify)) {
-		/* wake processes polling /dev/mcelog */
-		wake_up_interruptible(&mce_chrdev_wait);
-
-		if (mce_helper[0])
-			schedule_work(&mce_trigger_work);
-
-		if (__ratelimit(&ratelimit))
-			pr_info(HW_ERR "Machine check events logged\n");
-
+		mce_notify_work();
 		return 1;
 	}
 	return 0;
@@ -1732,7 +1748,7 @@ static void __mcheck_cpu_clear_vendor(struct cpuinfo_x86 *c)
 	}
 }
 
-static void mce_start_timer(unsigned int cpu, struct timer_list *t)
+static void mce_start_timer(unsigned int cpu, struct hrtimer *t)
 {
 	unsigned long iv = check_interval * HZ;
 
@@ -1741,16 +1757,17 @@ static void mce_start_timer(unsigned int cpu, struct timer_list *t)
 
 	per_cpu(mce_next_interval, cpu) = iv;
 
-	t->expires = round_jiffies(jiffies + iv);
-	add_timer_on(t, cpu);
+	hrtimer_start_range_ns(t, ns_to_ktime(jiffies_to_usecs(iv) * 1000ULL),
+			0, HRTIMER_MODE_REL_PINNED);
 }
 
 static void __mcheck_cpu_init_timer(void)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
+	struct hrtimer *t = this_cpu_ptr(&mce_timer);
 	unsigned int cpu = smp_processor_id();
 
-	setup_pinned_timer(t, mce_timer_fn, cpu);
+	hrtimer_init(t, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	t->function = mce_timer_fn;
 	mce_start_timer(cpu, t);
 }
 
@@ -2475,6 +2492,8 @@ static void mce_disable_cpu(void *h)
 	if (!mce_available(raw_cpu_ptr(&cpu_info)))
 		return;
 
+	hrtimer_cancel(this_cpu_ptr(&mce_timer));
+
 	if (!(action & CPU_TASKS_FROZEN))
 		cmci_clear();
 
@@ -2497,6 +2516,7 @@ static void mce_reenable_cpu(void *h)
 		if (b->init)
 			wrmsrl(msr_ops.ctl(i), b->ctl);
 	}
+	__mcheck_cpu_init_timer();
 }
 
 /* Get notified when a cpu comes on/off. Be hotplug friendly. */
@@ -2504,7 +2524,6 @@ static int
 mce_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 {
 	unsigned int cpu = (unsigned long)hcpu;
-	struct timer_list *t = &per_cpu(mce_timer, cpu);
 
 	switch (action & ~CPU_TASKS_FROZEN) {
 	case CPU_ONLINE:
@@ -2524,11 +2543,9 @@ mce_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 		break;
 	case CPU_DOWN_PREPARE:
 		smp_call_function_single(cpu, mce_disable_cpu, &action, 1);
-		del_timer_sync(t);
 		break;
 	case CPU_DOWN_FAILED:
 		smp_call_function_single(cpu, mce_reenable_cpu, &action, 1);
-		mce_start_timer(cpu, t);
 		break;
 	}
 
@@ -2566,6 +2583,10 @@ static __init int mcheck_init_device(void)
 		err = -EIO;
 		goto err_out;
 	}
+
+	err = mce_notify_work_init();
+	if (err)
+		goto err_out;
 
 	if (!zalloc_cpumask_var(&mce_device_initialized, GFP_KERNEL)) {
 		err = -ENOMEM;

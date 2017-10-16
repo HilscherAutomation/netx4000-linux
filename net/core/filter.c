@@ -1645,7 +1645,7 @@ static inline int __bpf_tx_skb(struct net_device *dev, struct sk_buff *skb)
 {
 	int ret;
 
-	if (unlikely(__this_cpu_read(xmit_recursion) > XMIT_RECURSION_LIMIT)) {
+	if (unlikely(xmit_rec_read() > XMIT_RECURSION_LIMIT)) {
 		net_crit_ratelimited("bpf: recursion limit reached on datapath, buggy bpf program?\n");
 		kfree_skb(skb);
 		return -ENETDOWN;
@@ -1653,9 +1653,9 @@ static inline int __bpf_tx_skb(struct net_device *dev, struct sk_buff *skb)
 
 	skb->dev = dev;
 
-	__this_cpu_inc(xmit_recursion);
+	xmit_rec_inc();
 	ret = dev_queue_xmit(skb);
-	__this_cpu_dec(xmit_recursion);
+	xmit_rec_dec();
 
 	return ret;
 }
@@ -2198,6 +2198,7 @@ bool bpf_helper_changes_skb_data(void *func)
 	    func == bpf_skb_change_proto ||
 	    func == bpf_skb_change_tail ||
 	    func == bpf_skb_pull_data ||
+	    func == bpf_clone_redirect ||
 	    func == bpf_l3_csum_replace ||
 	    func == bpf_l4_csum_replace)
 		return true;

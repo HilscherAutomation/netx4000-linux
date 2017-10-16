@@ -854,6 +854,7 @@ void __irq_entry handler_irq(int pil, struct pt_regs *regs)
 	set_irq_regs(old_regs);
 }
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 void do_softirq_own_stack(void)
 {
 	void *orig_sp, *sp = softirq_stack[smp_processor_id()];
@@ -868,6 +869,7 @@ void do_softirq_own_stack(void)
 	__asm__ __volatile__("mov %0, %%sp"
 			     : : "r" (orig_sp));
 }
+#endif
 
 #ifdef CONFIG_HOTPLUG_CPU
 void fixup_irqs(void)
@@ -1021,7 +1023,7 @@ static void __init alloc_one_queue(unsigned long *pa_ptr, unsigned long qmask)
 	unsigned long order = get_order(size);
 	unsigned long p;
 
-	p = __get_free_pages(GFP_KERNEL, order);
+	p = __get_free_pages(GFP_KERNEL | __GFP_ZERO, order);
 	if (!p) {
 		prom_printf("SUN4V: Error, cannot allocate queue.\n");
 		prom_halt();
@@ -1034,17 +1036,26 @@ static void __init init_cpu_send_mondo_info(struct trap_per_cpu *tb)
 {
 #ifdef CONFIG_SMP
 	unsigned long page;
+	void *mondo, *p;
 
-	BUILD_BUG_ON((NR_CPUS * sizeof(u16)) > (PAGE_SIZE - 64));
+	BUILD_BUG_ON((NR_CPUS * sizeof(u16)) > PAGE_SIZE);
+
+	/* Make sure mondo block is 64byte aligned */
+	p = kzalloc(127, GFP_KERNEL);
+	if (!p) {
+		prom_printf("SUN4V: Error, cannot allocate mondo block.\n");
+		prom_halt();
+	}
+	mondo = (void *)(((unsigned long)p + 63) & ~0x3f);
+	tb->cpu_mondo_block_pa = __pa(mondo);
 
 	page = get_zeroed_page(GFP_KERNEL);
 	if (!page) {
-		prom_printf("SUN4V: Error, cannot allocate cpu mondo page.\n");
+		prom_printf("SUN4V: Error, cannot allocate cpu list page.\n");
 		prom_halt();
 	}
 
-	tb->cpu_mondo_block_pa = __pa(page);
-	tb->cpu_list_pa = __pa(page + 64);
+	tb->cpu_list_pa = __pa(page);
 #endif
 }
 
