@@ -264,6 +264,30 @@
 			pinctrl-single,function-mask = <0xffff>;
 		};
 
+		/* cifX */
+
+		idpm0: idpm0@05210000 {
+			status = "disabled";
+			compatible = "hilscher,uio-netx";
+			reg = <0x05210000 0x10000>;
+			interrupt-names = "card";
+			interrupts = <GIC_SPI (253-32) IRQ_TYPE_LEVEL_HIGH>;
+			dma = <0>;
+			startuptype = "flash";
+			alias = "idpm0";
+		};
+
+		idpm1: idpm1@05250000 {
+			status = "disabled";
+			compatible = "hilscher,uio-netx";
+			reg = <0x05250000 0x10000>;
+			interrupt-names = "card";
+			interrupts = <GIC_SPI (254-32) IRQ_TYPE_LEVEL_HIGH>;
+			dma = <0>;
+			startuptype = "flash";
+			alias = "idpm1";
+		};
+
 		/* RTC */
 
 		rtc0: rtc@f801ce00 {
