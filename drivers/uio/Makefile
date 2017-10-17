@@ -1,3 +1,7 @@
+uio_netx-flags-$(CONFIG_UIO_NETX_DMA_SUPPORT) \
+			:= -DDMA_SUPPORT
+CFLAGS_uio_netx.o	+= $(uio_netx-flags-y)
+
 obj-$(CONFIG_UIO)	+= uio.o
 obj-$(CONFIG_UIO_CIF)	+= uio_cif.o
 obj-$(CONFIG_UIO_PDRV_GENIRQ)	+= uio_pdrv_genirq.o

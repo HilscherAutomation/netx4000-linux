@@ -95,7 +95,6 @@ config UIO_PCI_GENERIC
 
 config UIO_NETX
 	tristate "Hilscher NetX Card driver"
-	depends on PCI
 	help
 	  Driver for Hilscher NetX based fieldbus cards (cifX, comX).
 	  This driver requires a userspace component that comes with the card
@@ -103,6 +102,12 @@ config UIO_NETX
 
 	  To compile this driver as a module, choose M here; the module
 	  will be called uio_netx.
+
+config UIO_NETX_DMA_SUPPORT
+        bool "Enable DMA support"
+        depends on UIO_NETX
+        help
+          Say Y here to add DMA support for uio_netx devices (e.g. PCI cards)
 
 config UIO_FSL_ELBC_GPCM
 	tristate "eLBC/GPCM driver"
