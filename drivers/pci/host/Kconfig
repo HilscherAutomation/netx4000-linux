@@ -173,4 +173,17 @@ config PCI_HISI
 	help
 	  Say Y here if you want PCIe controller support on HiSilicon HIP05 SoC
 
+config PCIE_NETX4000
+	bool "Hilscher netX4000 PCIe controller"
+	depends on ARCH_NETX4000
+	depends on OF
+	depends on PCI_MSI
+	select OF_PCI
+	select OF_PCI_IRQ
+	help
+	  Say Y here if you want internal PCIe support on Hilscher
+          netX4000 SoC.
+	  There is 1 internal PCIe port available to support GEN2 with
+	  1 slots.
+
 endmenu
