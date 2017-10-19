@@ -105,6 +105,11 @@
 		&range (MUX_PIN(5,0)/4) 2 (REEMUX_1 | REEMUX_DRV_12MA | REEMUX_UDC_PULLDOWN50K)
 		&range (MUX_PIN(5,6)/4) 7 (REEMUX_1 | REEMUX_DRV_12MA | REEMUX_UDC_PULLDOWN50K)
 		&range (MUX_PIN(6,9)/4) 5 (REEMUX_1 | REEMUX_DRV_12MA | REEMUX_UDC_PULLDOWN50K)
+
+		/* pcie-rc */
+		&range (MUX_PIN(6,2)/4)  1 (REEMUX_1 | REEMUX_DRV_04MA | REEMUX_UDC_PULLDOWN50K) // mmio50 / gpio2_18 / reset-gpio
+		&range (MUX_PIN(6,14)/4) 1 (REEMUX_1 | REEMUX_DRV_04MA | REEMUX_UDC_PULLDOWN50K) // mmio62 / gpio2_30 / wake-gpio
+		&range (MUX_PIN(6,15)/4) 1 (REEMUX_1 | REEMUX_DRV_04MA | REEMUX_UDC_PULLDOWN50K) // mmio63 / gpio2_31 / clkreq-gpio
 	>;
 
 	range: gpio-range {
@@ -180,4 +185,11 @@
 
 &idpm0 {
 	status = "ok";
+};
+
+&pcie_rc {
+	status = "ok";
+	reset-gpio   = <&gpio2 18 GPIO_ACTIVE_LOW>;
+	wake-gpio    = <&gpio2 30 GPIO_ACTIVE_LOW>;
+	clkreq-gpio  = <&gpio2 31 GPIO_ACTIVE_LOW>;
 };
