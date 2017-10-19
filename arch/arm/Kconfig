@@ -469,6 +469,7 @@ config ARCH_NETX4000
 	select HAVE_ARM_SCU if SMP
 	select HAVE_ARM_TWD if SMP
 	select MIGHT_HAVE_CACHE_L2X0
+	select MIGHT_HAVE_PCI
 	help
 	  This enables support for systems based on the Hilscher netX4000 SoC
 
