@@ -666,6 +666,64 @@
 			>;
 			dma-names = "rx", "tx";
 		};
+
+		/* PCIe root complex */
+
+		pcie_rc: pci_rc@f8050000 {
+			status = "disabled";
+			compatible = "hilscher,netx4000-pcie-rc";
+			reg = <0xf8050000 0x4000>;
+
+			device_type = "pci";
+			linux,pci-domain = <1>;
+			max-link-speed = <2>;
+
+			interrupts = <GIC_SPI (97-32)  IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (98-32)  IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (99-32)  IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (100-32) IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (101-32) IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (102-32) IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (103-32) IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (104-32) IRQ_TYPE_LEVEL_HIGH>,
+			             <GIC_SPI (105-32) IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "all",
+			                  "dma",
+			                  "msi_rc",
+			                  "serr",
+			                  "err_cor",
+			                  "err_fatal",
+			                  "err_nonfatal",
+			                  "msg",
+			                  "pcie_evt";
+
+			clocks = <&pcie_clk>;
+
+			bus-range = <0 0xff>;
+
+			#address-cells = <3>;
+			#size-cells = <2>;
+
+			// pci_space
+			//        0x01: IO   pci_addr     cpu_addr     size
+			//        0x02: Mem  (64bit)      (64bit)
+			//        0x40: pref
+			ranges = <0x02000000 0 0xC0000000 0xC0000000 0 0x10000000   /* non-prefetchable memory (256M) */
+			          0x42000000 0 0xD0000000 0xD0000000 0 0x10000000>; /* prefetchable memory (256M) */
+
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 0x7>;
+			interrupt-map = <0 0 0 1 &pcie_intc 1>, /* inta */
+			                <0 0 0 2 &pcie_intc 2>, /* intb */
+			                <0 0 0 3 &pcie_intc 3>, /* intc */
+			                <0 0 0 4 &pcie_intc 4>; /* intd */
+
+			pcie_intc: irq-controller@pcie {
+				interrupt-controller;
+				#address-cells = <0>;
+				#interrupt-cells = <1>;
+			};
+		};
 	};
 };
 
