@@ -493,6 +493,7 @@ config GPIO_ZX
 config GPIO_NETX4000
 	tristate "GPIO driver for netX4000 based platforms"
 	depends on ARCH_NETX4000
+	select GPIOLIB_IRQCHIP
 	default y
 	help
 	  This selects GPIO support on Hilscher netX4000 based platforms.
