@@ -1374,7 +1374,6 @@ CONFIG_GPIO_SYSFS=y
 # Memory mapped GPIO drivers
 #
 # CONFIG_GPIO_74XX_MMIO is not set
-CONFIG_GPIO_ALTERA=y
 # CONFIG_GPIO_DWAPB is not set
 # CONFIG_GPIO_EM is not set
 # CONFIG_GPIO_GENERIC_PLATFORM is not set
