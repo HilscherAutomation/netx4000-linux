@@ -21,8 +21,6 @@
 #define DRIVER_DESC "EDAC DDR MC driver for Hilscher netX4000 based platforms"
 #define DRIVER_NAME "edac-ddr-mc-netx4000"
 
-#define FEATURE_ERROR_INJECTION 1
-
 #include <linux/edac.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -35,7 +33,7 @@
 #define dram_class(base)  (readl(base+DENALI_CTL_0) >> 8 & 0xf)
 
 #define DENALI_CTL_1  0x04
-#define max_row_reg(base)  (readl(base+DENALI_CTL_1) & 0xf)
+#define max_row_reg(base)  (readl(base+DENALI_CTL_1) >> 0 & 0x1f)
 #define max_col_reg(base)  (readl(base+DENALI_CTL_1) >> 8 & 0xf)
 
 #define DENALI_CTL_39  0x9c
@@ -48,7 +46,7 @@
 #define ecc_disable_w_uc_err(base)  (readl(base+DENALI_CTL_41) >> 0 & 0x1)
 
 #define DENALI_CTL_42  0xa8
-#define ecc_u_addr(base)  (readl(base+DENALI_CTL_42) & 0x7fffffff)
+#define ecc_u_addr(base)  (readl(base+DENALI_CTL_42))
 
 #define DENALI_CTL_43  0xac
 #define ecc_u_synd(base)  (readl(base+DENALI_CTL_43) >> 8 & 0x7f)
@@ -57,7 +55,7 @@
 #define ecc_u_data(base)  (readl(base+DENALI_CTL_44))
 
 #define DENALI_CTL_45  0xb4
-#define ecc_c_addr(base)  (readl(base+DENALI_CTL_45) & 0x7fffffff)
+#define ecc_c_addr(base)  (readl(base+DENALI_CTL_45))
 
 #define DENALI_CTL_46  0xb8
 #define ecc_c_synd(base)  (readl(base+DENALI_CTL_46) >> 8 & 0x7f)
@@ -77,18 +75,22 @@
 #define DENALI_CTL_58  0xe8
 #define reduc(base)  (readl(base+DENALI_CTL_58) >> 16 & 0x1)
 
-#define DENALI_CTL_61  0xf4
-#define int_status(base)  (readl(base+DENALI_CTL_61) & 0x7fffff)
-
-#define DENALI_CTL_62  0xf8
-#define int_ack(base,mask)  (writel(mask & 0x3fffff, base+DENALI_CTL_62))
-
-#define DENALI_CTL_63  0xfc
-#define int_mask(base,mask)  (writel(mask & 0x7fffff, base+DENALI_CTL_63))
-
 #define DENALI_CTL_152  0x260
 #define ecc_en(base)  (readl(base+DENALI_CTL_152) & 0x1)
 
+#define DENALI_CTL_158  0x278
+#define int_status(base)  (readl(base+DENALI_CTL_158) & 0x3ffffff)
+#define IntLogicalOr  (1 << 25)
+#define IntMultiUE    (1 << 6)
+#define IntUE         (1 << 5)
+#define IntMultiCE    (1 << 4)
+#define IntCE         (1 << 3)
+
+#define DENALI_CTL_159  0x27c
+#define int_ack(base,mask)  (writel(mask & 0x1ffffff, base+DENALI_CTL_159))
+
+#define DENALI_CTL_160  0x280
+#define int_mask(base,mask)  (writel(mask & 0x3ffffff, base+DENALI_CTL_160))
 
 #define NETX4000_EDAC_MSG_SIZE	256
 
@@ -141,13 +143,13 @@ struct priv_data {
 	u32 memsize;
 	char message[NETX4000_EDAC_MSG_SIZE];
 	struct ecc_status stat;
-#ifdef FEATURE_ERROR_INJECTION
+#ifdef CONFIG_EDAC_DDR_MC_NETX4000_ERROR_INJECTION
 	uint32_t xor_check_bits;
 	uint32_t lock;
 #endif
 };
 
-#ifdef FEATURE_ERROR_INJECTION
+#ifdef CONFIG_EDAC_DDR_MC_NETX4000_ERROR_INJECTION
 #include <linux/sysfs.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
@@ -184,7 +186,8 @@ static int netx4000_edac_ddr_mc_thread_function(void *data)
 
 	fwc(priv->baseaddr, 1);
 
-	*testbuf = 0x20161216;
+	/* ATTENTION: The DDR controller raises an exeption in case of multiple ECC errors. */
+	*testbuf = 0x20171218;
 	testval = *testbuf;
 
 	spin_unlock_irqrestore(&mLock, flags);
@@ -252,7 +255,7 @@ static struct attribute *netx4000_edac_ddr_mc_dev_attrs[] = {
 
 ATTRIBUTE_GROUPS(netx4000_edac_ddr_mc_dev);
 
-#endif /* FEATURE_ERROR_INJECTION */
+#endif /* CONFIG_EDAC_DDR_MC_NETX4000_ERROR_INJECTION */
 
 
 /**
@@ -270,7 +273,7 @@ static int netx4000_edac_ddr_mc_get_error_info(struct mem_ctl_info *mci, u32 sta
 	struct ecc_status *stat = &priv->stat;
 	u32 ack = 0;
 
-	if (status & (1<<3)) {
+	if (status & IntCE) {
 		stat->ceinfo.addr = ecc_c_addr(priv->baseaddr) + PHYS_OFFSET;
 		stat->ceinfo.row = (stat->ceinfo.addr >> (priv->banks + priv->cols + 2)) & ((1 << priv->rows)-1);
 		stat->ceinfo.bank = (stat->ceinfo.addr >> (priv->cols + 2)) & ((1 << priv->banks)-1);
@@ -278,13 +281,13 @@ static int netx4000_edac_ddr_mc_get_error_info(struct mem_ctl_info *mci, u32 sta
 		stat->ceinfo.data = ecc_c_data(priv->baseaddr);
 		stat->ceinfo.synd = ecc_c_synd(priv->baseaddr);
 		stat->ce_cnt++;
-		ack |= (1<<3);
+		ack |= IntCE;
 	}
-	if (status & (1<<4)) {
+	if (status & IntMultiCE) {
 		stat->ce_cnt++;
-		ack |= (1<<4);
+		ack |= IntMultiCE;
 	}
-	if (status & (1<<5)) {
+	if (status & IntUE) {
 		stat->ueinfo.addr = ecc_u_addr(priv->baseaddr) + PHYS_OFFSET;
 		stat->ueinfo.row = (stat->ueinfo.addr >> (priv->banks + priv->cols + 2)) & ((1 << priv->rows)-1);
 		stat->ueinfo.bank = (stat->ueinfo.addr >> (priv->cols + 2)) & ((1 << priv->banks)-1);
@@ -292,11 +295,11 @@ static int netx4000_edac_ddr_mc_get_error_info(struct mem_ctl_info *mci, u32 sta
 		stat->ueinfo.data = ecc_u_data(priv->baseaddr);
 		stat->ueinfo.synd = ecc_u_synd(priv->baseaddr);
 		stat->ue_cnt++;
-		ack |= (1<<5);
+		ack |= IntUE;
 	}
-	if (status & (1<<6)) {
+	if (status & IntMultiUE) {
 		stat->ue_cnt++;
-		ack |= (1<<6);
+		ack |= IntMultiUE;
 	}
 
 	return ack;
@@ -366,7 +369,7 @@ static irqreturn_t netx4000_edac_ddr_mc_isr(int irq, void *dev_id)
 	u32 status, ack = 0;
 
 	status = int_status(priv->baseaddr);
-	status &= ~(1<<22); /* masks out the logical OR bit */
+	status &= ~IntLogicalOr; /* masks out the logical OR bit */
 
 	ack |= netx4000_edac_ddr_mc_get_error_info(mci, status);
 
@@ -377,7 +380,7 @@ static irqreturn_t netx4000_edac_ddr_mc_isr(int irq, void *dev_id)
 	if (ack) {
 		int_ack(priv->baseaddr,ack); /* ack of IRQs must be done prior the error handling! */
 
-		if (ack & (0xf<<3)) /* ECC IRQs */
+		if (ack & (IntMultiUE | IntUE | IntMultiCE | IntCE)) /* ECC IRQs */
 			netx4000_edac_ddr_mc_handle_error(mci);
 
 		return IRQ_HANDLED;
@@ -598,7 +601,7 @@ static int netx4000_edac_ddr_mc_probe(struct platform_device *pdev)
 		goto free_edac_mc;
 	}
 
-#ifdef FEATURE_ERROR_INJECTION
+#ifdef CONFIG_EDAC_DDR_MC_NETX4000_ERROR_INJECTION
 	rc = edac_mc_add_mc_with_groups(mci, netx4000_edac_ddr_mc_dev_groups);
 #else
 	rc = edac_mc_add_mc(mci);
@@ -611,8 +614,8 @@ static int netx4000_edac_ddr_mc_probe(struct platform_device *pdev)
 
 	if (edac_op_state == EDAC_OPSTATE_INT) {
 		priv->irq = irq;
-		int_ack(baseaddr, 0x00000078); /* Clear pending ECC IRQs */
-		int_mask(baseaddr, ~0x00400078); /* Enable ECC IRQs */
+		int_ack(baseaddr, -1); /* Clear all pending IRQs */
+		int_mask(baseaddr, ~(IntLogicalOr | IntMultiUE | IntUE | IntMultiCE | IntCE)); /* Enable ECC IRQs */
 		rc = devm_request_irq(&pdev->dev, priv->irq, netx4000_edac_ddr_mc_isr, 0, dev_name(&pdev->dev), mci);
 		if (rc < 0) {
 			dev_err(&pdev->dev, "Error: Unable to request irq %d\n", priv->irq);
