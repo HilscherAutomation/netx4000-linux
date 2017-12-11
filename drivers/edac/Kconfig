@@ -472,6 +472,11 @@ config EDAC_DDR_MC_NETX4000
 	  To compile this driver as a module, choose M here:
 	  the module will be called edac-ddr-mc-netx4000.
 
+config EDAC_DDR_MC_NETX4000_ERROR_INJECTION
+	bool "Error injection support"
+	depends on EDAC_DDR_MC_NETX4000
+	default n
+
 config EDAC_CACHE_DC_NETX4000
 	tristate "EDAC CACHE DC driver for netX4000 based platforms"
 	depends on ARCH_NETX4000
