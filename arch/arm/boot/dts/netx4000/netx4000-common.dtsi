@@ -137,6 +137,7 @@
 		};
 
 		/* Gated clocks */
+		/* NOTE: This gated clock comprises clk100_usb and clk33_usb */
 		usb_clk: usb_clk {
 			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
@@ -144,6 +145,7 @@
 			clock-frequency = <(100 * 1000 * 1000)>;
 			clock-mask = <0x01>;
 		};
+		/* NOTE: This gated clock comprises clk133_pcie_aclk and clk133_pcie_clk_pmu */
 		pcie_clk: pcie_clk {
 			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
@@ -151,6 +153,7 @@
 			clock-frequency = <(133 * 1000 * 1000)>;
 			clock-mask = <0x02>;
 		};
+		/* NOTE: This gated clock comprises clk100_r7_sdio */
 		sdio_clk: sdio_clk {
 			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
@@ -158,13 +161,15 @@
 			clock-frequency = <(100 * 1000 * 1000)>;
 			clock-mask = <0x04>;
 		};
+		/* NOTE: This gated clock comprises clk150_a9_gmac, clk125_eth_gmac, clk25_eth_gmac and clk2_5_eth_gmac */
 		gmac_clk: gmac_clk {
 			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
 			clock-output-names = "gmac_clk";
-			clock-frequency = <(200 * 1000 * 1000)>;
+			clock-frequency = <(150 * 1000 * 1000)>;
 			clock-mask = <0x08>;
 		};
+		/* NOTE: This gated clock comprises clk200_r7_eswitch, clk100_r7_eswitch, clk125_eth_eswitch, clk25_eth_eswitch and clk2_5_eth_eswitch */
 		switch_clk: switch_clk {
 			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
@@ -172,6 +177,7 @@
 			clock-frequency = <(200 * 1000 * 1000)>;
 			clock-mask = <0x10>;
 		};
+		/* NOTE: This gated clock comprises clk_pixclk(1000) and clk150_a9_tes */
 		gfx_clk: gfx_clk {
 			compatible = "hilscher,netx4000-periph-clock";
 			#clock-cells = <0>;
@@ -179,6 +185,14 @@
 			clock-frequency = <(1*1000*1000*1000)>;
 			clock-mask = <0x20>;
 		};
+		/* NOTE: This gated clock comprises clk600_a9_ddr, clk300_a9_ddr and clk150_a9_ddr */
+// 		ddr_clk: ddr_clk {
+// 			compatible = "hilscher,netx4000-periph-clock";
+// 			#clock-cells = <0>;
+// 			clock-output-names = "ddr_clk";
+// 			clock-frequency = <(600 * 1000 * 1000)>;
+// 			clock-mask = <0x40>;
+// 		};
 	};
 
 	/* AMBA devices */
