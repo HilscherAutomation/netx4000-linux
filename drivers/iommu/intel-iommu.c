@@ -479,7 +479,7 @@ struct deferred_flush_data {
 	struct deferred_flush_table *tables;
 };
 
-DEFINE_PER_CPU(struct deferred_flush_data, deferred_flush);
+static DEFINE_PER_CPU(struct deferred_flush_data, deferred_flush);
 
 /* bitmap for indexing intel_iommus */
 static int g_num_of_iommus;
@@ -1144,7 +1144,7 @@ static void dma_pte_free_level(struct dmar_domain *domain, int level,
 		if (!dma_pte_present(pte) || dma_pte_superpage(pte))
 			goto next;
 
-		level_pfn = pfn & level_mask(level - 1);
+		level_pfn = pfn & level_mask(level);
 		level_pte = phys_to_virt(dma_pte_addr(pte));
 
 		if (level > 2)
@@ -2049,11 +2049,14 @@ static int domain_context_mapping_one(struct dmar_domain *domain,
 	if (context_copied(context)) {
 		u16 did_old = context_domain_id(context);
 
-		if (did_old >= 0 && did_old < cap_ndoms(iommu->cap))
+		if (did_old >= 0 && did_old < cap_ndoms(iommu->cap)) {
 			iommu->flush.flush_context(iommu, did_old,
 						   (((u16)bus) << 8) | devfn,
 						   DMA_CCMD_MASK_NOBIT,
 						   DMA_CCMD_DEVICE_INVL);
+			iommu->flush.flush_iotlb(iommu, did_old, 0, 0,
+						 DMA_TLB_DSI_FLUSH);
+		}
 	}
 
 	pgd = domain->pgd;
@@ -3716,10 +3719,8 @@ static void add_unmap(struct dmar_domain *dom, unsigned long iova_pfn,
 	struct intel_iommu *iommu;
 	struct deferred_flush_entry *entry;
 	struct deferred_flush_data *flush_data;
-	unsigned int cpuid;
 
-	cpuid = get_cpu();
-	flush_data = per_cpu_ptr(&deferred_flush, cpuid);
+	flush_data = raw_cpu_ptr(&deferred_flush);
 
 	/* Flush all CPUs' entries to avoid deferring too much.  If
 	 * this becomes a bottleneck, can just flush us, and rely on
@@ -3752,8 +3753,6 @@ static void add_unmap(struct dmar_domain *dom, unsigned long iova_pfn,
 	}
 	flush_data->size++;
 	spin_unlock_irqrestore(&flush_data->lock, flags);
-
-	put_cpu();
 }
 
 static void intel_unmap(struct device *dev, dma_addr_t dev_addr, size_t size)

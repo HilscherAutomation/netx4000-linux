@@ -301,8 +301,7 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
 	 * decide that the page is now completely done.
 	 */
 	first = page_buffers(page);
-	local_irq_save(flags);
-	bit_spin_lock(BH_Uptodate_Lock, &first->b_state);
+	flags = bh_uptodate_lock_irqsave(first);
 	clear_buffer_async_read(bh);
 	unlock_buffer(bh);
 	tmp = bh;
@@ -315,8 +314,7 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
 		}
 		tmp = tmp->b_this_page;
 	} while (tmp != bh);
-	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
-	local_irq_restore(flags);
+	bh_uptodate_unlock_irqrestore(first, flags);
 
 	/*
 	 * If none of the buffers had errors and they are all
@@ -328,9 +326,7 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
 	return;
 
 still_busy:
-	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
-	local_irq_restore(flags);
-	return;
+	bh_uptodate_unlock_irqrestore(first, flags);
 }
 
 /*
@@ -358,8 +354,7 @@ void end_buffer_async_write(struct buffer_head *bh, int uptodate)
 	}
 
 	first = page_buffers(page);
-	local_irq_save(flags);
-	bit_spin_lock(BH_Uptodate_Lock, &first->b_state);
+	flags = bh_uptodate_lock_irqsave(first);
 
 	clear_buffer_async_write(bh);
 	unlock_buffer(bh);
@@ -371,15 +366,12 @@ void end_buffer_async_write(struct buffer_head *bh, int uptodate)
 		}
 		tmp = tmp->b_this_page;
 	}
-	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
-	local_irq_restore(flags);
+	bh_uptodate_unlock_irqrestore(first, flags);
 	end_page_writeback(page);
 	return;
 
 still_busy:
-	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
-	local_irq_restore(flags);
-	return;
+	bh_uptodate_unlock_irqrestore(first, flags);
 }
 EXPORT_SYMBOL(end_buffer_async_write);
 
@@ -2353,7 +2345,7 @@ static int cont_expand_zero(struct file *file, struct address_space *mapping,
 			    loff_t pos, loff_t *bytes)
 {
 	struct inode *inode = mapping->host;
-	unsigned blocksize = 1 << inode->i_blkbits;
+	unsigned int blocksize = i_blocksize(inode);
 	struct page *page;
 	void *fsdata;
 	pgoff_t index, curidx;
@@ -2433,8 +2425,8 @@ int cont_write_begin(struct file *file, struct address_space *mapping,
 			get_block_t *get_block, loff_t *bytes)
 {
 	struct inode *inode = mapping->host;
-	unsigned blocksize = 1 << inode->i_blkbits;
-	unsigned zerofrom;
+	unsigned int blocksize = i_blocksize(inode);
+	unsigned int zerofrom;
 	int err;
 
 	err = cont_expand_zero(file, mapping, pos, bytes);
@@ -2796,7 +2788,7 @@ int nobh_truncate_page(struct address_space *mapping,
 	struct buffer_head map_bh;
 	int err;
 
-	blocksize = 1 << inode->i_blkbits;
+	blocksize = i_blocksize(inode);
 	length = offset & (blocksize - 1);
 
 	/* Block boundary? Nothing to do */
@@ -2874,7 +2866,7 @@ int block_truncate_page(struct address_space *mapping,
 	struct buffer_head *bh;
 	int err;
 
-	blocksize = 1 << inode->i_blkbits;
+	blocksize = i_blocksize(inode);
 	length = offset & (blocksize - 1);
 
 	/* Block boundary? Nothing to do */
@@ -2986,7 +2978,7 @@ sector_t generic_block_bmap(struct address_space *mapping, sector_t block,
 	struct inode *inode = mapping->host;
 	tmp.b_state = 0;
 	tmp.b_blocknr = 0;
-	tmp.b_size = 1 << inode->i_blkbits;
+	tmp.b_size = i_blocksize(inode);
 	get_block(inode, block, &tmp, 0);
 	return tmp.b_blocknr;
 }
@@ -3383,6 +3375,7 @@ struct buffer_head *alloc_buffer_head(gfp_t gfp_flags)
 	struct buffer_head *ret = kmem_cache_zalloc(bh_cachep, gfp_flags);
 	if (ret) {
 		INIT_LIST_HEAD(&ret->b_assoc_buffers);
+		buffer_head_init_locks(ret);
 		preempt_disable();
 		__this_cpu_inc(bh_accounting.nr);
 		recalc_bh_state();

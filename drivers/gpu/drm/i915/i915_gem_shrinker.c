@@ -40,7 +40,7 @@ static bool mutex_is_locked_by(struct mutex *mutex, struct task_struct *task)
 	if (!mutex_is_locked(mutex))
 		return false;
 
-#if defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_MUTEX_SPIN_ON_OWNER)
+#if (defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_MUTEX_SPIN_ON_OWNER)) && !defined(CONFIG_PREEMPT_RT_BASE)
 	return mutex->owner == task;
 #else
 	/* Since UP may be pre-empted, we cannot assume that we own the lock */
@@ -233,7 +233,7 @@ unsigned long i915_gem_shrink_all(struct drm_i915_private *dev_priv)
 				I915_SHRINK_BOUND |
 				I915_SHRINK_UNBOUND |
 				I915_SHRINK_ACTIVE);
-	rcu_barrier(); /* wait until our RCU delayed slab frees are completed */
+	synchronize_rcu(); /* wait for our earlier RCU delayed slab frees */
 
 	return freed;
 }
