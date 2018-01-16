@@ -62,14 +62,12 @@ static void mlx5e_timestamp_overflow(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct mlx5e_tstamp *tstamp = container_of(dwork, struct mlx5e_tstamp,
 						   overflow_work);
-	struct mlx5e_priv *priv = container_of(tstamp, struct mlx5e_priv, tstamp);
 	unsigned long flags;
 
 	write_lock_irqsave(&tstamp->lock, flags);
 	timecounter_read(&tstamp->clock);
 	write_unlock_irqrestore(&tstamp->lock, flags);
-	queue_delayed_work(priv->wq, &tstamp->overflow_work,
-			   msecs_to_jiffies(tstamp->overflow_period * 1000));
+	schedule_delayed_work(&tstamp->overflow_work, tstamp->overflow_period);
 }
 
 int mlx5e_hwstamp_set(struct net_device *dev, struct ifreq *ifr)
@@ -265,7 +263,7 @@ void mlx5e_timestamp_init(struct mlx5e_priv *priv)
 
 	INIT_DELAYED_WORK(&tstamp->overflow_work, mlx5e_timestamp_overflow);
 	if (tstamp->overflow_period)
-		queue_delayed_work(priv->wq, &tstamp->overflow_work, 0);
+		schedule_delayed_work(&tstamp->overflow_work, 0);
 	else
 		mlx5_core_warn(priv->mdev, "invalid overflow period, overflow_work is not scheduled\n");
 

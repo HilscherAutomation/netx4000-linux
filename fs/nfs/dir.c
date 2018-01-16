@@ -1167,13 +1167,11 @@ static int nfs_lookup_revalidate(struct dentry *dentry, unsigned int flags)
 	/* Force a full look up iff the parent directory has changed */
 	if (!nfs_is_exclusive_create(dir, flags) &&
 	    nfs_check_verifier(dir, dentry, flags & LOOKUP_RCU)) {
-		error = nfs_lookup_verify_inode(inode, flags);
-		if (error) {
+
+		if (nfs_lookup_verify_inode(inode, flags)) {
 			if (flags & LOOKUP_RCU)
 				return -ECHILD;
-			if (error == -ESTALE)
-				goto out_zap_parent;
-			goto out_error;
+			goto out_zap_parent;
 		}
 		goto out_valid;
 	}
@@ -1197,10 +1195,8 @@ static int nfs_lookup_revalidate(struct dentry *dentry, unsigned int flags)
 	trace_nfs_lookup_revalidate_enter(dir, dentry, flags);
 	error = NFS_PROTO(dir)->lookup(dir, &dentry->d_name, fhandle, fattr, label);
 	trace_nfs_lookup_revalidate_exit(dir, dentry, flags, error);
-	if (error == -ESTALE || error == -ENOENT)
-		goto out_bad;
 	if (error)
-		goto out_error;
+		goto out_bad;
 	if (nfs_compare_fh(NFS_FH(inode), fhandle))
 		goto out_bad;
 	if ((error = nfs_refresh_inode(inode, fattr)) != 0)

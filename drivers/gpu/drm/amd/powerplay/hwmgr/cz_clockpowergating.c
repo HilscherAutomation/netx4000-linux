@@ -200,7 +200,7 @@ int cz_dpm_powergate_vce(struct pp_hwmgr *hwmgr, bool bgate)
 				cgs_set_clockgating_state(
 							hwmgr->device,
 							AMD_IP_BLOCK_TYPE_VCE,
-							AMD_CG_STATE_GATE);
+							AMD_CG_STATE_UNGATE);
 				cgs_set_powergating_state(
 							hwmgr->device,
 							AMD_IP_BLOCK_TYPE_VCE,
@@ -218,7 +218,7 @@ int cz_dpm_powergate_vce(struct pp_hwmgr *hwmgr, bool bgate)
 				cgs_set_clockgating_state(
 							hwmgr->device,
 							AMD_IP_BLOCK_TYPE_VCE,
-							AMD_PG_STATE_UNGATE);
+							AMD_PG_STATE_GATE);
 				cz_dpm_update_vce_dpm(hwmgr);
 				cz_enable_disable_vce_dpm(hwmgr, true);
 				return 0;

@@ -790,14 +790,14 @@ static int _init_main_clk(struct omap_hwmod *oh)
 	int ret = 0;
 	char name[MOD_CLK_MAX_NAME_LEN];
 	struct clk *clk;
-	static const char modck[] = "_mod_ck";
 
-	if (strlen(oh->name) >= MOD_CLK_MAX_NAME_LEN - strlen(modck))
+	/* +7 magic comes from '_mod_ck' suffix */
+	if (strlen(oh->name) + 7 > MOD_CLK_MAX_NAME_LEN)
 		pr_warn("%s: warning: cropping name for %s\n", __func__,
 			oh->name);
 
-	strlcpy(name, oh->name, MOD_CLK_MAX_NAME_LEN - strlen(modck));
-	strlcat(name, modck, MOD_CLK_MAX_NAME_LEN);
+	strncpy(name, oh->name, MOD_CLK_MAX_NAME_LEN - 7);
+	strcat(name, "_mod_ck");
 
 	clk = clk_get(NULL, name);
 	if (!IS_ERR(clk)) {

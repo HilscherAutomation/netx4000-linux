@@ -240,7 +240,13 @@ void ceph_fscache_file_set_cookie(struct inode *inode, struct file *filp)
 	}
 }
 
-static void ceph_readpage_from_fscache_complete(struct page *page, void *data, int error)
+static void ceph_vfs_readpage_complete(struct page *page, void *data, int error)
+{
+	if (!error)
+		SetPageUptodate(page);
+}
+
+static void ceph_vfs_readpage_complete_unlock(struct page *page, void *data, int error)
 {
 	if (!error)
 		SetPageUptodate(page);
@@ -268,7 +274,7 @@ int ceph_readpage_from_fscache(struct inode *inode, struct page *page)
 		return -ENOBUFS;
 
 	ret = fscache_read_or_alloc_page(ci->fscache, page,
-					 ceph_readpage_from_fscache_complete, NULL,
+					 ceph_vfs_readpage_complete, NULL,
 					 GFP_KERNEL);
 
 	switch (ret) {
@@ -297,7 +303,7 @@ int ceph_readpages_from_fscache(struct inode *inode,
 		return -ENOBUFS;
 
 	ret = fscache_read_or_alloc_pages(ci->fscache, mapping, pages, nr_pages,
-					  ceph_readpage_from_fscache_complete,
+					  ceph_vfs_readpage_complete_unlock,
 					  NULL, mapping_gfp_mask(mapping));
 
 	switch (ret) {

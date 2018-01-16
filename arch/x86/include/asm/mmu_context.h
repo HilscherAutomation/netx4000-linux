@@ -116,7 +116,9 @@ static inline int init_new_context(struct task_struct *tsk,
 		mm->context.execute_only_pkey = -1;
 	}
 	#endif
-	return init_new_context_ldt(tsk, mm);
+	init_new_context_ldt(tsk, mm);
+
+	return 0;
 }
 static inline void destroy_context(struct mm_struct *mm)
 {

@@ -12,7 +12,6 @@
 */
 
 #include "exynos4412-odroidx.dts"
-#include "exynos4412-prime.dtsi"
 
 / {
 	model = "Hardkernel ODROID-X2 board based on Exynos4412";

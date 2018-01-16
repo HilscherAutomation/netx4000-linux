@@ -81,7 +81,7 @@ __setup("fpe=", fpe_setup);
 extern void init_default_cache_policy(unsigned long);
 extern void paging_init(const struct machine_desc *desc);
 extern void early_paging_init(const struct machine_desc *);
-extern void adjust_lowmem_bounds(void);
+extern void sanity_check_meminfo(void);
 extern enum reboot_mode reboot_mode;
 extern void setup_dma_zone(const struct machine_desc *desc);
 
@@ -1093,14 +1093,8 @@ void __init setup_arch(char **cmdline_p)
 	setup_dma_zone(mdesc);
 	xen_early_init();
 	efi_init();
-	/*
-	 * Make sure the calculation for lowmem/highmem is set appropriately
-	 * before reserving/allocating any mmeory
-	 */
-	adjust_lowmem_bounds();
+	sanity_check_meminfo();
 	arm_memblock_init(mdesc);
-	/* Memory may have been removed so recalculate the bounds. */
-	adjust_lowmem_bounds();
 
 	early_ioremap_reset();
 

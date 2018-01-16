@@ -129,11 +129,8 @@ static int kvm_spapr_tce_mmap(struct file *file, struct vm_area_struct *vma)
 static int kvm_spapr_tce_release(struct inode *inode, struct file *filp)
 {
 	struct kvmppc_spapr_tce_table *stt = filp->private_data;
-	struct kvm *kvm = stt->kvm;
 
-	mutex_lock(&kvm->lock);
 	list_del_rcu(&stt->list);
-	mutex_unlock(&kvm->lock);
 
 	kvm_put_kvm(stt->kvm);
 
@@ -153,7 +150,6 @@ long kvm_vm_ioctl_create_spapr_tce(struct kvm *kvm,
 				   struct kvm_create_spapr_tce_64 *args)
 {
 	struct kvmppc_spapr_tce_table *stt = NULL;
-	struct kvmppc_spapr_tce_table *siter;
 	unsigned long npages, size;
 	int ret = -ENOMEM;
 	int i;
@@ -161,16 +157,24 @@ long kvm_vm_ioctl_create_spapr_tce(struct kvm *kvm,
 	if (!args->size)
 		return -EINVAL;
 
+	/* Check this LIOBN hasn't been previously allocated */
+	list_for_each_entry(stt, &kvm->arch.spapr_tce_tables, list) {
+		if (stt->liobn == args->liobn)
+			return -EBUSY;
+	}
+
 	size = args->size;
 	npages = kvmppc_tce_pages(size);
 	ret = kvmppc_account_memlimit(kvmppc_stt_pages(npages), true);
-	if (ret)
-		return ret;
+	if (ret) {
+		stt = NULL;
+		goto fail;
+	}
 
 	stt = kzalloc(sizeof(*stt) + npages * sizeof(struct page *),
 		      GFP_KERNEL);
 	if (!stt)
-		goto fail_acct;
+		goto fail;
 
 	stt->liobn = args->liobn;
 	stt->page_shift = args->page_shift;
@@ -184,39 +188,24 @@ long kvm_vm_ioctl_create_spapr_tce(struct kvm *kvm,
 			goto fail;
 	}
 
+	kvm_get_kvm(kvm);
+
 	mutex_lock(&kvm->lock);
-
-	/* Check this LIOBN hasn't been previously allocated */
-	ret = 0;
-	list_for_each_entry(siter, &kvm->arch.spapr_tce_tables, list) {
-		if (siter->liobn == args->liobn) {
-			ret = -EBUSY;
-			break;
-		}
-	}
-
-	if (!ret)
-		ret = anon_inode_getfd("kvm-spapr-tce", &kvm_spapr_tce_fops,
-				       stt, O_RDWR | O_CLOEXEC);
-
-	if (ret >= 0) {
-		list_add_rcu(&stt->list, &kvm->arch.spapr_tce_tables);
-		kvm_get_kvm(kvm);
-	}
+	list_add_rcu(&stt->list, &kvm->arch.spapr_tce_tables);
 
 	mutex_unlock(&kvm->lock);
 
-	if (ret >= 0)
-		return ret;
+	return anon_inode_getfd("kvm-spapr-tce", &kvm_spapr_tce_fops,
+				stt, O_RDWR | O_CLOEXEC);
 
- fail:
-	for (i = 0; i < npages; i++)
-		if (stt->pages[i])
-			__free_page(stt->pages[i]);
+fail:
+	if (stt) {
+		for (i = 0; i < npages; i++)
+			if (stt->pages[i])
+				__free_page(stt->pages[i]);
 
-	kfree(stt);
- fail_acct:
-	kvmppc_account_memlimit(kvmppc_stt_pages(npages), false);
+		kfree(stt);
+	}
 	return ret;
 }
 

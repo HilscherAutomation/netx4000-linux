@@ -29,14 +29,13 @@
 static struct kmem_cache *nfs_page_cachep;
 static const struct rpc_call_ops nfs_pgio_common_ops;
 
-static bool nfs_pgarray_set(struct nfs_page_array *p, unsigned int pagecount,
-					gfp_t gfp_flags)
+static bool nfs_pgarray_set(struct nfs_page_array *p, unsigned int pagecount)
 {
 	p->npages = pagecount;
 	if (pagecount <= ARRAY_SIZE(p->page_array))
 		p->pagevec = p->page_array;
 	else {
-		p->pagevec = kcalloc(pagecount, sizeof(struct page *), gfp_flags);
+		p->pagevec = kcalloc(pagecount, sizeof(struct page *), GFP_KERNEL);
 		if (!p->pagevec)
 			p->npages = 0;
 	}
@@ -497,6 +496,16 @@ struct nfs_pgio_header *nfs_pgio_header_alloc(const struct nfs_rw_ops *ops)
 }
 EXPORT_SYMBOL_GPL(nfs_pgio_header_alloc);
 
+/*
+ * nfs_pgio_header_free - Free a read or write header
+ * @hdr: The header to free
+ */
+void nfs_pgio_header_free(struct nfs_pgio_header *hdr)
+{
+	hdr->rw_ops->rw_free_header(hdr);
+}
+EXPORT_SYMBOL_GPL(nfs_pgio_header_free);
+
 /**
  * nfs_pgio_data_destroy - make @hdr suitable for reuse
  *
@@ -505,24 +514,14 @@ EXPORT_SYMBOL_GPL(nfs_pgio_header_alloc);
  *
  * @hdr: A header that has had nfs_generic_pgio called
  */
-static void nfs_pgio_data_destroy(struct nfs_pgio_header *hdr)
+void nfs_pgio_data_destroy(struct nfs_pgio_header *hdr)
 {
 	if (hdr->args.context)
 		put_nfs_open_context(hdr->args.context);
 	if (hdr->page_array.pagevec != hdr->page_array.page_array)
 		kfree(hdr->page_array.pagevec);
 }
-
-/*
- * nfs_pgio_header_free - Free a read or write header
- * @hdr: The header to free
- */
-void nfs_pgio_header_free(struct nfs_pgio_header *hdr)
-{
-	nfs_pgio_data_destroy(hdr);
-	hdr->rw_ops->rw_free_header(hdr);
-}
-EXPORT_SYMBOL_GPL(nfs_pgio_header_free);
+EXPORT_SYMBOL_GPL(nfs_pgio_data_destroy);
 
 /**
  * nfs_pgio_rpcsetup - Set up arguments for a pageio call
@@ -636,6 +635,7 @@ EXPORT_SYMBOL_GPL(nfs_initiate_pgio);
 static void nfs_pgio_error(struct nfs_pgio_header *hdr)
 {
 	set_bit(NFS_IOHDR_REDO, &hdr->flags);
+	nfs_pgio_data_destroy(hdr);
 	hdr->completion_ops->completion(hdr);
 }
 
@@ -646,6 +646,7 @@ static void nfs_pgio_error(struct nfs_pgio_header *hdr)
 static void nfs_pgio_release(void *calldata)
 {
 	struct nfs_pgio_header *hdr = calldata;
+	nfs_pgio_data_destroy(hdr);
 	hdr->completion_ops->completion(hdr);
 }
 
@@ -680,7 +681,6 @@ void nfs_pageio_init(struct nfs_pageio_descriptor *desc,
 {
 	struct nfs_pgio_mirror *new;
 	int i;
-	gfp_t gfp_flags = GFP_KERNEL;
 
 	desc->pg_moreio = 0;
 	desc->pg_inode = inode;
@@ -700,10 +700,8 @@ void nfs_pageio_init(struct nfs_pageio_descriptor *desc,
 	if (pg_ops->pg_get_mirror_count) {
 		/* until we have a request, we don't have an lseg and no
 		 * idea how many mirrors there will be */
-		if (desc->pg_rw_ops->rw_mode == FMODE_WRITE)
-			gfp_flags = GFP_NOIO;
 		new = kcalloc(NFS_PAGEIO_DESCRIPTOR_MIRROR_MAX,
-			      sizeof(struct nfs_pgio_mirror), gfp_flags);
+			      sizeof(struct nfs_pgio_mirror), GFP_KERNEL);
 		desc->pg_mirrors_dynamic = new;
 		desc->pg_mirrors = new;
 
@@ -757,12 +755,9 @@ int nfs_generic_pgio(struct nfs_pageio_descriptor *desc,
 	struct list_head *head = &mirror->pg_list;
 	struct nfs_commit_info cinfo;
 	unsigned int pagecount, pageused;
-	gfp_t gfp_flags = GFP_KERNEL;
 
 	pagecount = nfs_page_array_len(mirror->pg_base, mirror->pg_count);
-	if (desc->pg_rw_ops->rw_mode == FMODE_WRITE)
-		gfp_flags = GFP_NOIO;
-	if (!nfs_pgarray_set(&hdr->page_array, pagecount, gfp_flags)) {
+	if (!nfs_pgarray_set(&hdr->page_array, pagecount)) {
 		nfs_pgio_error(hdr);
 		desc->pg_error = -ENOMEM;
 		return desc->pg_error;

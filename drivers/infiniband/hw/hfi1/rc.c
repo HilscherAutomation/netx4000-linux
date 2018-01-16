@@ -551,7 +551,7 @@ int hfi1_make_rc_req(struct rvt_qp *qp, struct hfi1_pkt_state *ps)
 		case IB_WR_RDMA_WRITE:
 			if (newreq && !(qp->s_flags & RVT_S_UNLIMITED_CREDIT))
 				qp->s_lsn++;
-			goto no_flow_control;
+			/* FALLTHROUGH */
 		case IB_WR_RDMA_WRITE_WITH_IMM:
 			/* If no credit, return. */
 			if (!(qp->s_flags & RVT_S_UNLIMITED_CREDIT) &&
@@ -559,7 +559,6 @@ int hfi1_make_rc_req(struct rvt_qp *qp, struct hfi1_pkt_state *ps)
 				qp->s_flags |= RVT_S_WAIT_SSN_CREDIT;
 				goto bail;
 			}
-no_flow_control:
 			put_ib_reth_vaddr(
 				wqe->rdma_wr.remote_addr,
 				&ohdr->u.rc.reth);
@@ -2367,11 +2366,8 @@ send_last:
 		ret = hfi1_rvt_get_rwqe(qp, 1);
 		if (ret < 0)
 			goto nack_op_err;
-		if (!ret) {
-			/* peer will send again */
-			rvt_put_ss(&qp->r_sge);
+		if (!ret)
 			goto rnr_nak;
-		}
 		wc.ex.imm_data = ohdr->u.rc.imm_data;
 		wc.wc_flags = IB_WC_WITH_IMM;
 		goto send_last;

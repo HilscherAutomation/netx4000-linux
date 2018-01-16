@@ -150,8 +150,13 @@ static void malidp_de_plane_update(struct drm_plane *plane,
 	/* convert src values from Q16 fixed point to integer */
 	src_w = plane->state->src_w >> 16;
 	src_h = plane->state->src_h >> 16;
-	dest_w = plane->state->crtc_w;
-	dest_h = plane->state->crtc_h;
+	if (plane->state->rotation & MALIDP_ROTATED_MASK) {
+		dest_w = plane->state->crtc_h;
+		dest_h = plane->state->crtc_w;
+	} else {
+		dest_w = plane->state->crtc_w;
+		dest_h = plane->state->crtc_h;
+	}
 
 	malidp_hw_write(mp->hwdev, format_id, mp->layer->base);
 
@@ -184,9 +189,9 @@ static void malidp_de_plane_update(struct drm_plane *plane,
 	if (plane->state->rotation & DRM_ROTATE_MASK)
 		val = ilog2(plane->state->rotation & DRM_ROTATE_MASK) << LAYER_ROT_OFFSET;
 	if (plane->state->rotation & DRM_REFLECT_X)
-		val |= LAYER_H_FLIP;
-	if (plane->state->rotation & DRM_REFLECT_Y)
 		val |= LAYER_V_FLIP;
+	if (plane->state->rotation & DRM_REFLECT_Y)
+		val |= LAYER_H_FLIP;
 
 	/* set the 'enable layer' bit */
 	val |= LAYER_ENABLE;

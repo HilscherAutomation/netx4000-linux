@@ -418,7 +418,7 @@ static enum resp_states check_length(struct rxe_qp *qp,
 static enum resp_states check_rkey(struct rxe_qp *qp,
 				   struct rxe_pkt_info *pkt)
 {
-	struct rxe_mem *mem = NULL;
+	struct rxe_mem *mem;
 	u64 va;
 	u32 rkey;
 	u32 resid;
@@ -452,38 +452,38 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 	mem = lookup_mem(qp->pd, access, rkey, lookup_remote);
 	if (!mem) {
 		state = RESPST_ERR_RKEY_VIOLATION;
-		goto err;
+		goto err1;
 	}
 
 	if (unlikely(mem->state == RXE_MEM_STATE_FREE)) {
 		state = RESPST_ERR_RKEY_VIOLATION;
-		goto err;
+		goto err1;
 	}
 
 	if (mem_check_range(mem, va, resid)) {
 		state = RESPST_ERR_RKEY_VIOLATION;
-		goto err;
+		goto err2;
 	}
 
 	if (pkt->mask & RXE_WRITE_MASK)	 {
 		if (resid > mtu) {
 			if (pktlen != mtu || bth_pad(pkt)) {
 				state = RESPST_ERR_LENGTH;
-				goto err;
+				goto err2;
 			}
 
 			qp->resp.resid = mtu;
 		} else {
 			if (pktlen != resid) {
 				state = RESPST_ERR_LENGTH;
-				goto err;
+				goto err2;
 			}
 			if ((bth_pad(pkt) != (0x3 & (-resid)))) {
 				/* This case may not be exactly that
 				 * but nothing else fits.
 				 */
 				state = RESPST_ERR_LENGTH;
-				goto err;
+				goto err2;
 			}
 		}
 	}
@@ -493,9 +493,9 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 	qp->resp.mr = mem;
 	return RESPST_EXECUTE;
 
-err:
-	if (mem)
-		rxe_drop_ref(mem);
+err2:
+	rxe_drop_ref(mem);
+err1:
 	return state;
 }
 

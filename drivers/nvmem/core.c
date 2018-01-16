@@ -488,24 +488,21 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
 
 	rval = device_add(&nvmem->dev);
 	if (rval)
-		goto err_put_device;
+		goto out;
 
 	if (config->compat) {
 		rval = nvmem_setup_compat(nvmem, config);
 		if (rval)
-			goto err_device_del;
+			goto out;
 	}
 
 	if (config->cells)
 		nvmem_add_cells(nvmem, config);
 
 	return nvmem;
-
-err_device_del:
-	device_del(&nvmem->dev);
-err_put_device:
-	put_device(&nvmem->dev);
-
+out:
+	ida_simple_remove(&nvmem_ida, nvmem->id);
+	kfree(nvmem);
 	return ERR_PTR(rval);
 }
 EXPORT_SYMBOL_GPL(nvmem_register);

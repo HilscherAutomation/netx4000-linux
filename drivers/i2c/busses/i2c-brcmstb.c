@@ -465,7 +465,6 @@ static int brcmstb_i2c_xfer(struct i2c_adapter *adapter,
 	u8 *tmp_buf;
 	int len = 0;
 	int xfersz = brcmstb_i2c_get_xfersz(dev);
-	u32 cond, cond_per_msg;
 
 	if (dev->is_suspended)
 		return -EBUSY;
@@ -482,11 +481,10 @@ static int brcmstb_i2c_xfer(struct i2c_adapter *adapter,
 			pmsg->buf ? pmsg->buf[0] : '0', pmsg->len);
 
 		if (i < (num - 1) && (msgs[i + 1].flags & I2C_M_NOSTART))
-			cond = ~COND_START_STOP;
+			brcmstb_set_i2c_start_stop(dev, ~(COND_START_STOP));
 		else
-			cond = COND_RESTART | COND_NOSTOP;
-
-		brcmstb_set_i2c_start_stop(dev, cond);
+			brcmstb_set_i2c_start_stop(dev,
+						   COND_RESTART | COND_NOSTOP);
 
 		/* Send slave address */
 		if (!(pmsg->flags & I2C_M_NOSTART)) {
@@ -499,24 +497,13 @@ static int brcmstb_i2c_xfer(struct i2c_adapter *adapter,
 			}
 		}
 
-		cond_per_msg = cond;
-
 		/* Perform data transfer */
 		while (len) {
 			bytes_to_xfer = min(len, xfersz);
 
-			if (len <= xfersz) {
-				if (i == (num - 1))
-					cond_per_msg = cond_per_msg &
-						~(COND_RESTART | COND_NOSTOP);
-				else
-					cond_per_msg = cond;
-			} else {
-				cond_per_msg = (cond_per_msg & ~COND_RESTART) |
-					COND_NOSTOP;
-			}
-
-			brcmstb_set_i2c_start_stop(dev, cond_per_msg);
+			if (len <= xfersz && i == (num - 1))
+				brcmstb_set_i2c_start_stop(dev,
+							   ~(COND_START_STOP));
 
 			rc = brcmstb_i2c_xfer_bsc_data(dev, tmp_buf,
 						       bytes_to_xfer, pmsg);
@@ -525,8 +512,6 @@ static int brcmstb_i2c_xfer(struct i2c_adapter *adapter,
 
 			len -=  bytes_to_xfer;
 			tmp_buf += bytes_to_xfer;
-
-			cond_per_msg = COND_NOSTART | COND_NOSTOP;
 		}
 	}
 

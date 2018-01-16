@@ -972,12 +972,11 @@ static int kvm_s390_shadow_tables(struct gmap *sg, unsigned long saddr,
 	ptr = asce.origin * 4096;
 	if (asce.r) {
 		*fake = 1;
-		ptr = 0;
 		asce.dt = ASCE_TYPE_REGION1;
 	}
 	switch (asce.dt) {
 	case ASCE_TYPE_REGION1:
-		if (vaddr.rfx01 > asce.tl && !*fake)
+		if (vaddr.rfx01 > asce.tl && !asce.r)
 			return PGM_REGION_FIRST_TRANS;
 		break;
 	case ASCE_TYPE_REGION2:
@@ -1005,7 +1004,8 @@ static int kvm_s390_shadow_tables(struct gmap *sg, unsigned long saddr,
 		union region1_table_entry rfte;
 
 		if (*fake) {
-			ptr += (unsigned long) vaddr.rfx << 53;
+			/* offset in 16EB guest memory block */
+			ptr = ptr + ((unsigned long) vaddr.rsx << 53UL);
 			rfte.val = ptr;
 			goto shadow_r2t;
 		}
@@ -1031,7 +1031,8 @@ shadow_r2t:
 		union region2_table_entry rste;
 
 		if (*fake) {
-			ptr += (unsigned long) vaddr.rsx << 42;
+			/* offset in 8PB guest memory block */
+			ptr = ptr + ((unsigned long) vaddr.rtx << 42UL);
 			rste.val = ptr;
 			goto shadow_r3t;
 		}
@@ -1058,7 +1059,8 @@ shadow_r3t:
 		union region3_table_entry rtte;
 
 		if (*fake) {
-			ptr += (unsigned long) vaddr.rtx << 31;
+			/* offset in 4TB guest memory block */
+			ptr = ptr + ((unsigned long) vaddr.sx << 31UL);
 			rtte.val = ptr;
 			goto shadow_sgt;
 		}
@@ -1094,7 +1096,8 @@ shadow_sgt:
 		union segment_table_entry ste;
 
 		if (*fake) {
-			ptr += (unsigned long) vaddr.sx << 20;
+			/* offset in 2G guest memory block */
+			ptr = ptr + ((unsigned long) vaddr.sx << 20UL);
 			ste.val = ptr;
 			goto shadow_pgt;
 		}

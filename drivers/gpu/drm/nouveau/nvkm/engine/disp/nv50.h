@@ -27,7 +27,7 @@ struct nv50_disp {
 		u8 type[3];
 	} pior;
 
-	struct nv50_disp_chan *chan[21];
+	struct nv50_disp_chan *chan[17];
 };
 
 int nv50_disp_root_scanoutpos(NV50_DISP_MTHD_V0);

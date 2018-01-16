@@ -434,7 +434,6 @@ static struct pmu cstate_core_pmu = {
 	.stop		= cstate_pmu_event_stop,
 	.read		= cstate_pmu_event_update,
 	.capabilities	= PERF_PMU_CAP_NO_INTERRUPT,
-	.module		= THIS_MODULE,
 };
 
 static struct pmu cstate_pkg_pmu = {
@@ -448,7 +447,6 @@ static struct pmu cstate_pkg_pmu = {
 	.stop		= cstate_pmu_event_stop,
 	.read		= cstate_pmu_event_update,
 	.capabilities	= PERF_PMU_CAP_NO_INTERRUPT,
-	.module		= THIS_MODULE,
 };
 
 static const struct cstate_model nhm_cstates __initconst = {

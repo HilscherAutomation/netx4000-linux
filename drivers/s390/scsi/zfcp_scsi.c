@@ -3,7 +3,7 @@
  *
  * Interface to Linux SCSI midlayer.
  *
- * Copyright IBM Corp. 2002, 2017
+ * Copyright IBM Corp. 2002, 2016
  */
 
 #define KMSG_COMPONENT "zfcp"
@@ -273,29 +273,25 @@ static int zfcp_task_mgmt_function(struct scsi_cmnd *scpnt, u8 tm_flags)
 
 		zfcp_erp_wait(adapter);
 		ret = fc_block_scsi_eh(scpnt);
-		if (ret) {
-			zfcp_dbf_scsi_devreset("fiof", scpnt, tm_flags, NULL);
+		if (ret)
 			return ret;
-		}
 
 		if (!(atomic_read(&adapter->status) &
 		      ZFCP_STATUS_COMMON_RUNNING)) {
-			zfcp_dbf_scsi_devreset("nres", scpnt, tm_flags, NULL);
+			zfcp_dbf_scsi_devreset("nres", scpnt, tm_flags);
 			return SUCCESS;
 		}
 	}
-	if (!fsf_req) {
-		zfcp_dbf_scsi_devreset("reqf", scpnt, tm_flags, NULL);
+	if (!fsf_req)
 		return FAILED;
-	}
 
 	wait_for_completion(&fsf_req->completion);
 
 	if (fsf_req->status & ZFCP_STATUS_FSFREQ_TMFUNCFAILED) {
-		zfcp_dbf_scsi_devreset("fail", scpnt, tm_flags, fsf_req);
+		zfcp_dbf_scsi_devreset("fail", scpnt, tm_flags);
 		retval = FAILED;
 	} else {
-		zfcp_dbf_scsi_devreset("okay", scpnt, tm_flags, fsf_req);
+		zfcp_dbf_scsi_devreset("okay", scpnt, tm_flags);
 		zfcp_scsi_forget_cmnds(zfcp_sdev, tm_flags);
 	}
 

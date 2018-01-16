@@ -27,7 +27,6 @@
 #include "xfs_error.h"
 #include "xfs_trace.h"
 #include "xfs_trans_priv.h"
-#include "xfs_buf_item.h"
 #include "xfs_log.h"
 
 
@@ -476,23 +475,6 @@ xfs_inode_item_unpin(
 		wake_up_bit(&ip->i_flags, __XFS_IPINNED_BIT);
 }
 
-/*
- * Callback used to mark a buffer with XFS_LI_FAILED when items in the buffer
- * have been failed during writeback
- *
- * This informs the AIL that the inode is already flush locked on the next push,
- * and acquires a hold on the buffer to ensure that it isn't reclaimed before
- * dirty data makes it to disk.
- */
-STATIC void
-xfs_inode_item_error(
-	struct xfs_log_item	*lip,
-	struct xfs_buf		*bp)
-{
-	ASSERT(xfs_isiflocked(INODE_ITEM(lip)->ili_inode));
-	xfs_set_li_failed(lip, bp);
-}
-
 STATIC uint
 xfs_inode_item_push(
 	struct xfs_log_item	*lip,
@@ -502,27 +484,12 @@ xfs_inode_item_push(
 {
 	struct xfs_inode_log_item *iip = INODE_ITEM(lip);
 	struct xfs_inode	*ip = iip->ili_inode;
-	struct xfs_buf		*bp = lip->li_buf;
+	struct xfs_buf		*bp = NULL;
 	uint			rval = XFS_ITEM_SUCCESS;
 	int			error;
 
 	if (xfs_ipincount(ip) > 0)
 		return XFS_ITEM_PINNED;
-
-	/*
-	 * The buffer containing this item failed to be written back
-	 * previously. Resubmit the buffer for IO.
-	 */
-	if (lip->li_flags & XFS_LI_FAILED) {
-		if (!xfs_buf_trylock(bp))
-			return XFS_ITEM_LOCKED;
-
-		if (!xfs_buf_resubmit_failed_buffers(bp, lip, buffer_list))
-			rval = XFS_ITEM_FLUSHING;
-
-		xfs_buf_unlock(bp);
-		return rval;
-	}
 
 	if (!xfs_ilock_nowait(ip, XFS_ILOCK_SHARED))
 		return XFS_ITEM_LOCKED;
@@ -655,8 +622,7 @@ static const struct xfs_item_ops xfs_inode_item_ops = {
 	.iop_unlock	= xfs_inode_item_unlock,
 	.iop_committed	= xfs_inode_item_committed,
 	.iop_push	= xfs_inode_item_push,
-	.iop_committing = xfs_inode_item_committing,
-	.iop_error	= xfs_inode_item_error
+	.iop_committing = xfs_inode_item_committing
 };
 
 
@@ -744,8 +710,7 @@ xfs_iflush_done(
 		 * the AIL lock.
 		 */
 		iip = INODE_ITEM(blip);
-		if ((iip->ili_logged && blip->li_lsn == iip->ili_flush_lsn) ||
-		    lip->li_flags & XFS_LI_FAILED)
+		if (iip->ili_logged && blip->li_lsn == iip->ili_flush_lsn)
 			need_ail++;
 
 		blip = next;
@@ -753,8 +718,7 @@ xfs_iflush_done(
 
 	/* make sure we capture the state of the initial inode. */
 	iip = INODE_ITEM(lip);
-	if ((iip->ili_logged && lip->li_lsn == iip->ili_flush_lsn) ||
-	    lip->li_flags & XFS_LI_FAILED)
+	if (iip->ili_logged && lip->li_lsn == iip->ili_flush_lsn)
 		need_ail++;
 
 	/*
@@ -767,30 +731,22 @@ xfs_iflush_done(
 	 * holding the lock before removing the inode from the AIL.
 	 */
 	if (need_ail) {
-		bool			mlip_changed = false;
-
-		/* this is an opencoded batch version of xfs_trans_ail_delete */
+		struct xfs_log_item *log_items[need_ail];
+		int i = 0;
 		spin_lock(&ailp->xa_lock);
 		for (blip = lip; blip; blip = blip->li_bio_list) {
-			if (INODE_ITEM(blip)->ili_logged &&
-			    blip->li_lsn == INODE_ITEM(blip)->ili_flush_lsn)
-				mlip_changed |= xfs_ail_delete_one(ailp, blip);
-			else {
-				xfs_clear_li_failed(blip);
+			iip = INODE_ITEM(blip);
+			if (iip->ili_logged &&
+			    blip->li_lsn == iip->ili_flush_lsn) {
+				log_items[i++] = blip;
 			}
+			ASSERT(i <= need_ail);
 		}
-
-		if (mlip_changed) {
-			if (!XFS_FORCED_SHUTDOWN(ailp->xa_mount))
-				xlog_assign_tail_lsn_locked(ailp->xa_mount);
-			if (list_empty(&ailp->xa_ail))
-				wake_up_all(&ailp->xa_empty);
-		}
-		spin_unlock(&ailp->xa_lock);
-
-		if (mlip_changed)
-			xfs_log_space_wake(ailp->xa_mount);
+		/* xfs_trans_ail_delete_bulk() drops the AIL lock. */
+		xfs_trans_ail_delete_bulk(ailp, log_items, i,
+					  SHUTDOWN_CORRUPT_INCORE);
 	}
+
 
 	/*
 	 * clean up and unlock the flush lock now we are done. We can clear the

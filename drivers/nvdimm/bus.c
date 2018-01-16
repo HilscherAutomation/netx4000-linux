@@ -218,10 +218,7 @@ long nvdimm_clear_poison(struct device *dev, phys_addr_t phys,
 	if (cmd_rc < 0)
 		return cmd_rc;
 
-	if (clear_err.cleared > 0)
-		nvdimm_clear_from_poison_list(nvdimm_bus, phys,
-					      clear_err.cleared);
-
+	nvdimm_clear_from_poison_list(nvdimm_bus, phys, len);
 	return clear_err.cleared;
 }
 EXPORT_SYMBOL_GPL(nvdimm_clear_poison);

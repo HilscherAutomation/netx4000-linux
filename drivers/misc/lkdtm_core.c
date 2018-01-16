@@ -533,9 +533,7 @@ static void __exit lkdtm_module_exit(void)
 	/* Handle test-specific clean-up. */
 	lkdtm_usercopy_exit();
 
-	if (lkdtm_jprobe != NULL)
-		unregister_jprobe(lkdtm_jprobe);
-
+	unregister_jprobe(lkdtm_jprobe);
 	pr_info("Crash point unregistered\n");
 }
 

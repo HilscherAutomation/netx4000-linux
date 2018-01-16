@@ -370,7 +370,6 @@ struct gfs2_glock {
 			loff_t end;
 		} gl_vm;
 	};
-	struct rcu_head gl_rcu;
 	struct rhash_head gl_node;
 };
 

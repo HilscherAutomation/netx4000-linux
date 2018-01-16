@@ -170,8 +170,8 @@ xfs_get_acl(struct inode *inode, int type)
 	return acl;
 }
 
-int
-__xfs_set_acl(struct inode *inode, struct posix_acl *acl, int type)
+STATIC int
+__xfs_set_acl(struct inode *inode, int type, struct posix_acl *acl)
 {
 	struct xfs_inode *ip = XFS_I(inode);
 	unsigned char *ea_name;
@@ -268,5 +268,5 @@ xfs_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 	}
 
  set_acl:
-	return __xfs_set_acl(inode, acl, type);
+	return __xfs_set_acl(inode, type, acl);
 }

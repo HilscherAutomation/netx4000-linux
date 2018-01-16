@@ -36,6 +36,10 @@
 #define VGT_VERSION_MAJOR 1
 #define VGT_VERSION_MINOR 0
 
+#define INTEL_VGT_IF_VERSION_ENCODE(major, minor) ((major) << 16 | (minor))
+#define INTEL_VGT_IF_VERSION \
+	INTEL_VGT_IF_VERSION_ENCODE(VGT_VERSION_MAJOR, VGT_VERSION_MINOR)
+
 /*
  * notifications from guest to vgpu device model
  */
@@ -51,8 +55,8 @@ enum vgt_g2v_type {
 
 struct vgt_if {
 	u64 magic;		/* VGT_MAGIC */
-	u16 version_major;
-	u16 version_minor;
+	uint16_t version_major;
+	uint16_t version_minor;
 	u32 vgt_id;		/* ID of vGT instance */
 	u32 rsv1[12];		/* pad to offset 0x40 */
 	/*

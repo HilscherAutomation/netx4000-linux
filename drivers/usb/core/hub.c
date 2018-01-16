@@ -360,8 +360,7 @@ static void usb_set_lpm_parameters(struct usb_device *udev)
 }
 
 /* USB 2.0 spec Section 11.24.4.5 */
-static int get_hub_descriptor(struct usb_device *hdev,
-		struct usb_hub_descriptor *desc)
+static int get_hub_descriptor(struct usb_device *hdev, void *data)
 {
 	int i, ret, size;
 	unsigned dtype;
@@ -377,18 +376,10 @@ static int get_hub_descriptor(struct usb_device *hdev,
 	for (i = 0; i < 3; i++) {
 		ret = usb_control_msg(hdev, usb_rcvctrlpipe(hdev, 0),
 			USB_REQ_GET_DESCRIPTOR, USB_DIR_IN | USB_RT_HUB,
-			dtype << 8, 0, desc, size,
+			dtype << 8, 0, data, size,
 			USB_CTRL_GET_TIMEOUT);
-		if (hub_is_superspeed(hdev)) {
-			if (ret == size)
-				return ret;
-		} else if (ret >= USB_DT_HUB_NONVAR_SIZE + 2) {
-			/* Make sure we have the DeviceRemovable field. */
-			size = USB_DT_HUB_NONVAR_SIZE + desc->bNbrPorts / 8 + 1;
-			if (ret < size)
-				return -EMSGSIZE;
+		if (ret >= (USB_DT_HUB_NONVAR_SIZE + 2))
 			return ret;
-		}
 	}
 	return -EINVAL;
 }
@@ -1073,9 +1064,6 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 
 		portstatus = portchange = 0;
 		status = hub_port_status(hub, port1, &portstatus, &portchange);
-		if (status)
-			goto abort;
-
 		if (udev || (portstatus & USB_PORT_STAT_CONNECTION))
 			dev_dbg(&port_dev->dev, "status %04x change %04x\n",
 					portstatus, portchange);
@@ -1208,7 +1196,7 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 
 	/* Scan all ports that need attention */
 	kick_hub_wq(hub);
- abort:
+
 	if (type == HUB_INIT2 || type == HUB_INIT3) {
 		/* Allow autosuspend if it was suppressed */
  disconnected:
@@ -1320,7 +1308,7 @@ static int hub_configure(struct usb_hub *hub,
 	}
 	mutex_init(&hub->status_mutex);
 
-	hub->descriptor = kzalloc(sizeof(*hub->descriptor), GFP_KERNEL);
+	hub->descriptor = kmalloc(sizeof(*hub->descriptor), GFP_KERNEL);
 	if (!hub->descriptor) {
 		ret = -ENOMEM;
 		goto fail;
@@ -1328,19 +1316,13 @@ static int hub_configure(struct usb_hub *hub,
 
 	/* Request the entire hub descriptor.
 	 * hub->descriptor can handle USB_MAXCHILDREN ports,
-	 * but a (non-SS) hub can/will return fewer bytes here.
+	 * but the hub can/will return fewer bytes here.
 	 */
 	ret = get_hub_descriptor(hdev, hub->descriptor);
 	if (ret < 0) {
 		message = "can't read hub descriptor";
 		goto fail;
-	}
-
-	maxchild = USB_MAXCHILDREN;
-	if (hub_is_superspeed(hdev))
-		maxchild = min_t(unsigned, maxchild, USB_SS_MAXPORTS);
-
-	if (hub->descriptor->bNbrPorts > maxchild) {
+	} else if (hub->descriptor->bNbrPorts > USB_MAXCHILDREN) {
 		message = "hub has too many ports!";
 		ret = -ENODEV;
 		goto fail;
@@ -2099,12 +2081,6 @@ void usb_disconnect(struct usb_device **pdev)
 	usb_set_device_state(udev, USB_STATE_NOTATTACHED);
 	dev_info(&udev->dev, "USB disconnect, device number %d\n",
 			udev->devnum);
-
-	/*
-	 * Ensure that the pm runtime code knows that the USB device
-	 * is in the process of being disconnected.
-	 */
-	pm_runtime_barrier(&udev->dev);
 
 	usb_lock_device(udev);
 
@@ -4728,8 +4704,7 @@ hub_power_remaining(struct usb_hub *hub)
 static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 		u16 portchange)
 {
-	int status = -ENODEV;
-	int i;
+	int status, i;
 	unsigned unit_load;
 	struct usb_device *hdev = hub->hdev;
 	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
@@ -4828,7 +4803,7 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 			goto loop;
 
 		if (udev->quirks & USB_QUIRK_DELAY_INIT)
-			msleep(2000);
+			msleep(1000);
 
 		/* consecutive bus-powered hubs aren't reliable; they can
 		 * violate the voltage drop budget.  if the new child has
@@ -4933,10 +4908,9 @@ loop:
 
 done:
 	hub_port_disable(hub, port1, 1);
-	if (hcd->driver->relinquish_port && !hub->hdev->parent) {
-		if (status != -ENOTCONN && status != -ENODEV)
-			hcd->driver->relinquish_port(hcd, port1);
-	}
+	if (hcd->driver->relinquish_port && !hub->hdev->parent)
+		hcd->driver->relinquish_port(hcd, port1);
+
 }
 
 /* Handle physical or logical connection change events.
