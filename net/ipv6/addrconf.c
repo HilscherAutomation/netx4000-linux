@@ -3299,6 +3299,7 @@ static void addrconf_permanent_addr(struct net_device *dev)
 		if ((ifp->flags & IFA_F_PERMANENT) &&
 		    fixup_permanent_addr(idev, ifp) < 0) {
 			write_unlock_bh(&idev->lock);
+			in6_ifa_hold(ifp);
 			ipv6_del_addr(ifp);
 			write_lock_bh(&idev->lock);
 
@@ -5443,7 +5444,7 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 		 * our DAD process, so we don't need
 		 * to do it again
 		 */
-		if (!(ifp->rt->rt6i_node))
+		if (!rcu_access_pointer(ifp->rt->rt6i_node))
 			ip6_ins_rt(ifp->rt);
 		if (ifp->idev->cnf.forwarding)
 			addrconf_join_anycast(ifp);

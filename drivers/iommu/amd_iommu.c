@@ -2283,7 +2283,7 @@ static void queue_add(struct dma_ops_domain *dma_dom,
 	pages     = __roundup_pow_of_two(pages);
 	address >>= PAGE_SHIFT;
 
-	queue = get_cpu_ptr(&flush_queue);
+	queue = raw_cpu_ptr(&flush_queue);
 	spin_lock_irqsave(&queue->lock, flags);
 
 	if (queue->next == FLUSH_QUEUE_SIZE)
@@ -2300,8 +2300,6 @@ static void queue_add(struct dma_ops_domain *dma_dom,
 
 	if (atomic_cmpxchg(&queue_timer_on, 0, 1) == 0)
 		mod_timer(&queue_timer, jiffies + msecs_to_jiffies(10));
-
-	put_cpu_ptr(&flush_queue);
 }
 
 
@@ -3120,6 +3118,7 @@ static size_t amd_iommu_unmap(struct iommu_domain *dom, unsigned long iova,
 	mutex_unlock(&domain->api_lock);
 
 	domain_flush_tlb_pde(domain);
+	domain_flush_complete(domain);
 
 	return unmap_size;
 }

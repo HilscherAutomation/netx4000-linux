@@ -429,7 +429,7 @@ void raid5_release_stripe(struct stripe_head *sh)
 		md_wakeup_thread(conf->mddev->thread);
 	return;
 slow_path:
-	local_irq_save(flags);
+	local_irq_save_nort(flags);
 	/* we are ok here if STRIPE_ON_RELEASE_LIST is set or not */
 	if (atomic_dec_and_lock(&sh->count, &conf->device_lock)) {
 		INIT_LIST_HEAD(&list);
@@ -438,7 +438,7 @@ slow_path:
 		spin_unlock(&conf->device_lock);
 		release_inactive_stripe_list(conf, &list, hash);
 	}
-	local_irq_restore(flags);
+	local_irq_restore_nort(flags);
 }
 
 static inline void remove_hash(struct stripe_head *sh)
@@ -829,6 +829,14 @@ static void stripe_add_to_batch_list(struct r5conf *conf, struct stripe_head *sh
 			spin_unlock(&head->batch_head->batch_lock);
 			goto unlock_out;
 		}
+		/*
+		 * We must assign batch_head of this stripe within the
+		 * batch_lock, otherwise clear_batch_ready of batch head
+		 * stripe could clear BATCH_READY bit of this stripe and
+		 * this stripe->batch_head doesn't get assigned, which
+		 * could confuse clear_batch_ready for this stripe
+		 */
+		sh->batch_head = head->batch_head;
 
 		/*
 		 * at this point, head's BATCH_READY could be cleared, but we
@@ -836,8 +844,6 @@ static void stripe_add_to_batch_list(struct r5conf *conf, struct stripe_head *sh
 		 */
 		list_add(&sh->batch_list, &head->batch_list);
 		spin_unlock(&head->batch_head->batch_lock);
-
-		sh->batch_head = head->batch_head;
 	} else {
 		head->batch_head = head;
 		sh->batch_head = head->batch_head;
@@ -4279,7 +4285,8 @@ static void break_stripe_batch_list(struct stripe_head *head_sh,
 
 		set_mask_bits(&sh->state, ~(STRIPE_EXPAND_SYNC_FLAGS |
 					    (1 << STRIPE_PREREAD_ACTIVE) |
-					    (1 << STRIPE_DEGRADED)),
+					    (1 << STRIPE_DEGRADED) |
+					    (1 << STRIPE_ON_UNPLUG_LIST)),
 			      head_sh->state & (1 << STRIPE_INSYNC));
 
 		sh->check_state = head_sh->check_state;
@@ -5845,6 +5852,8 @@ static void raid5_do_work(struct work_struct *work)
 	pr_debug("%d stripes handled\n", handled);
 
 	spin_unlock_irq(&conf->device_lock);
+
+	r5l_flush_stripe_to_raid(conf->log);
 
 	async_tx_issue_pending_all();
 	blk_finish_plug(&plug);
