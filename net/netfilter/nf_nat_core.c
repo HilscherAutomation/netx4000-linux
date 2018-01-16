@@ -225,21 +225,20 @@ find_appropriate_src(struct net *net,
 		.tuple = tuple,
 		.zone = zone
 	};
-	struct rhlist_head *hl, *h;
+	struct rhlist_head *hl;
 
 	hl = rhltable_lookup(&nf_nat_bysource_table, &key,
 			     nf_nat_bysource_params);
+	if (!hl)
+		return 0;
 
-	rhl_for_each_entry_rcu(ct, h, hl, nat_bysource) {
-		nf_ct_invert_tuplepr(result,
-				     &ct->tuplehash[IP_CT_DIR_REPLY].tuple);
-		result->dst = tuple->dst;
+	ct = container_of(hl, typeof(*ct), nat_bysource);
 
-		if (in_range(l3proto, l4proto, result, range))
-			return 1;
-	}
+	nf_ct_invert_tuplepr(result,
+			     &ct->tuplehash[IP_CT_DIR_REPLY].tuple);
+	result->dst = tuple->dst;
 
-	return 0;
+	return in_range(l3proto, l4proto, result, range);
 }
 
 /* For [FUTURE] fragmentation handling, we want the least-used

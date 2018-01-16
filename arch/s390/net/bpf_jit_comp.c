@@ -1252,8 +1252,7 @@ static int bpf_jit_prog(struct bpf_jit *jit, struct bpf_prog *fp)
 		insn_count = bpf_jit_insn(jit, fp, i);
 		if (insn_count < 0)
 			return -1;
-		/* Next instruction address */
-		jit->addrs[i + insn_count] = jit->prg;
+		jit->addrs[i + 1] = jit->prg; /* Next instruction address */
 	}
 	bpf_jit_epilogue(jit);
 

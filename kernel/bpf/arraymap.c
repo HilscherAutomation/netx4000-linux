@@ -11,6 +11,7 @@
  */
 #include <linux/bpf.h>
 #include <linux/err.h>
+#include <linux/vmalloc.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/filter.h>
@@ -73,10 +74,14 @@ static struct bpf_map *array_map_alloc(union bpf_attr *attr)
 	if (array_size >= U32_MAX - PAGE_SIZE)
 		return ERR_PTR(-ENOMEM);
 
+
 	/* allocate all map elements and zero-initialize them */
-	array = bpf_map_area_alloc(array_size);
-	if (!array)
-		return ERR_PTR(-ENOMEM);
+	array = kzalloc(array_size, GFP_USER | __GFP_NOWARN);
+	if (!array) {
+		array = vzalloc(array_size);
+		if (!array)
+			return ERR_PTR(-ENOMEM);
+	}
 
 	/* copy mandatory map attributes */
 	array->map.map_type = attr->map_type;
@@ -92,7 +97,7 @@ static struct bpf_map *array_map_alloc(union bpf_attr *attr)
 
 	if (array_size >= U32_MAX - PAGE_SIZE ||
 	    elem_size > PCPU_MIN_UNIT_SIZE || bpf_array_alloc_percpu(array)) {
-		bpf_map_area_free(array);
+		kvfree(array);
 		return ERR_PTR(-ENOMEM);
 	}
 out:
@@ -257,7 +262,7 @@ static void array_map_free(struct bpf_map *map)
 	if (array->map.map_type == BPF_MAP_TYPE_PERCPU_ARRAY)
 		bpf_array_free_percpu(array);
 
-	bpf_map_area_free(array);
+	kvfree(array);
 }
 
 static const struct bpf_map_ops array_ops = {
@@ -314,8 +319,7 @@ static void fd_array_map_free(struct bpf_map *map)
 	/* make sure it's empty */
 	for (i = 0; i < array->map.max_entries; i++)
 		BUG_ON(array->ptrs[i] != NULL);
-
-	bpf_map_area_free(array);
+	kvfree(array);
 }
 
 static void *fd_array_map_lookup_elem(struct bpf_map *map, void *key)

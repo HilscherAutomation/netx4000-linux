@@ -346,7 +346,7 @@ ep_io (struct ep_data *epdata, void *buf, unsigned len)
 	spin_unlock_irq (&epdata->dev->lock);
 
 	if (likely (value == 0)) {
-		value = swait_event_interruptible (done.wait, done.done);
+		value = wait_event_interruptible (done.wait, done.done);
 		if (value != 0) {
 			spin_lock_irq (&epdata->dev->lock);
 			if (likely (epdata->ep != NULL)) {
@@ -355,7 +355,7 @@ ep_io (struct ep_data *epdata, void *buf, unsigned len)
 				usb_ep_dequeue (epdata->ep, epdata->req);
 				spin_unlock_irq (&epdata->dev->lock);
 
-				swait_event (done.wait, done.done);
+				wait_event (done.wait, done.done);
 				if (epdata->status == -ECONNRESET)
 					epdata->status = -EINTR;
 			} else {
@@ -1183,10 +1183,8 @@ dev_release (struct inode *inode, struct file *fd)
 
 	/* closing ep0 === shutdown all */
 
-	if (dev->gadget_registered) {
+	if (dev->gadget_registered)
 		usb_gadget_unregister_driver (&gadgetfs_driver);
-		dev->gadget_registered = false;
-	}
 
 	/* at this point "good" hardware has disconnected the
 	 * device from USB; the host won't see it any more.
@@ -1679,10 +1677,9 @@ static void
 gadgetfs_suspend (struct usb_gadget *gadget)
 {
 	struct dev_data		*dev = get_gadget_data (gadget);
-	unsigned long		flags;
 
 	INFO (dev, "suspended from state %d\n", dev->state);
-	spin_lock_irqsave(&dev->lock, flags);
+	spin_lock (&dev->lock);
 	switch (dev->state) {
 	case STATE_DEV_SETUP:		// VERY odd... host died??
 	case STATE_DEV_CONNECTED:
@@ -1693,7 +1690,7 @@ gadgetfs_suspend (struct usb_gadget *gadget)
 	default:
 		break;
 	}
-	spin_unlock_irqrestore(&dev->lock, flags);
+	spin_unlock (&dev->lock);
 }
 
 static struct usb_gadget_driver gadgetfs_driver = {

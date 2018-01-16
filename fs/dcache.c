@@ -19,7 +19,6 @@
 #include <linux/mm.h>
 #include <linux/fs.h>
 #include <linux/fsnotify.h>
-#include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/hash.h>
@@ -277,33 +276,6 @@ static inline int dname_external(const struct dentry *dentry)
 {
 	return dentry->d_name.name != dentry->d_iname;
 }
-
-void take_dentry_name_snapshot(struct name_snapshot *name, struct dentry *dentry)
-{
-	spin_lock(&dentry->d_lock);
-	if (unlikely(dname_external(dentry))) {
-		struct external_name *p = external_name(dentry);
-		atomic_inc(&p->u.count);
-		spin_unlock(&dentry->d_lock);
-		name->name = p->name;
-	} else {
-		memcpy(name->inline_name, dentry->d_iname, DNAME_INLINE_LEN);
-		spin_unlock(&dentry->d_lock);
-		name->name = name->inline_name;
-	}
-}
-EXPORT_SYMBOL(take_dentry_name_snapshot);
-
-void release_dentry_name_snapshot(struct name_snapshot *name)
-{
-	if (unlikely(name->name != name->inline_name)) {
-		struct external_name *p;
-		p = container_of(name->name, struct external_name, name[0]);
-		if (unlikely(atomic_dec_and_test(&p->u.count)))
-			kfree_rcu(p, u.head);
-	}
-}
-EXPORT_SYMBOL(release_dentry_name_snapshot);
 
 static inline void __d_set_inode_and_type(struct dentry *dentry,
 					  struct inode *inode,
@@ -778,8 +750,6 @@ static inline bool fast_dput(struct dentry *dentry)
  */
 void dput(struct dentry *dentry)
 {
-	struct dentry *parent;
-
 	if (unlikely(!dentry))
 		return;
 
@@ -818,18 +788,9 @@ repeat:
 	return;
 
 kill_it:
-	parent = dentry_kill(dentry);
-	if (parent) {
-		int r;
-
-		if (parent == dentry) {
-			/* the task with the highest priority won't schedule */
-			r = cond_resched();
-			if (!r)
-				cpu_chill();
-		} else {
-			dentry = parent;
-		}
+	dentry = dentry_kill(dentry);
+	if (dentry) {
+		cond_resched();
 		goto repeat;
 	}
 }
@@ -1172,12 +1133,11 @@ void shrink_dcache_sb(struct super_block *sb)
 		LIST_HEAD(dispose);
 
 		freed = list_lru_walk(&sb->s_dentry_lru,
-			dentry_lru_isolate_shrink, &dispose, 1024);
+			dentry_lru_isolate_shrink, &dispose, UINT_MAX);
 
 		this_cpu_sub(nr_dentry_unused, freed);
 		shrink_dentry_list(&dispose);
-		cond_resched();
-	} while (list_lru_count(&sb->s_dentry_lru) > 0);
+	} while (freed > 0);
 }
 EXPORT_SYMBOL(shrink_dcache_sb);
 
@@ -2364,7 +2324,7 @@ again:
 	if (dentry->d_lockref.count == 1) {
 		if (!spin_trylock(&inode->i_lock)) {
 			spin_unlock(&dentry->d_lock);
-			cpu_chill();
+			cpu_relax();
 			goto again;
 		}
 		dentry->d_flags &= ~DCACHE_CANT_MOUNT;
@@ -2424,24 +2384,21 @@ static inline void end_dir_add(struct inode *dir, unsigned n)
 
 static void d_wait_lookup(struct dentry *dentry)
 {
-	struct swait_queue __wait;
-
-	if (!d_in_lookup(dentry))
-		return;
-
-	INIT_LIST_HEAD(&__wait.task_list);
-	do {
-		prepare_to_swait(dentry->d_wait, &__wait, TASK_UNINTERRUPTIBLE);
-		spin_unlock(&dentry->d_lock);
-		schedule();
-		spin_lock(&dentry->d_lock);
-	} while (d_in_lookup(dentry));
-	finish_swait(dentry->d_wait, &__wait);
+	if (d_in_lookup(dentry)) {
+		DECLARE_WAITQUEUE(wait, current);
+		add_wait_queue(dentry->d_wait, &wait);
+		do {
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			spin_unlock(&dentry->d_lock);
+			schedule();
+			spin_lock(&dentry->d_lock);
+		} while (d_in_lookup(dentry));
+	}
 }
 
 struct dentry *d_alloc_parallel(struct dentry *parent,
 				const struct qstr *name,
-				struct swait_queue_head *wq)
+				wait_queue_head_t *wq)
 {
 	unsigned int hash = name->hash;
 	struct hlist_bl_head *b = in_lookup_hash(parent, hash);
@@ -2550,7 +2507,7 @@ void __d_lookup_done(struct dentry *dentry)
 	hlist_bl_lock(b);
 	dentry->d_flags &= ~DCACHE_PAR_LOOKUP;
 	__hlist_bl_del(&dentry->d_u.d_in_lookup_hash);
-	swake_up_all(dentry->d_wait);
+	wake_up_all(dentry->d_wait);
 	dentry->d_wait = NULL;
 	hlist_bl_unlock(b);
 	INIT_HLIST_NODE(&dentry->d_u.d_alias);
@@ -3647,11 +3604,6 @@ EXPORT_SYMBOL(d_genocide);
 
 void __init vfs_caches_init_early(void)
 {
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(in_lookup_hashtable); i++)
-		INIT_HLIST_BL_HEAD(&in_lookup_hashtable[i]);
-
 	dcache_init_early();
 	inode_init_early();
 }

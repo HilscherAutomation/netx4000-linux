@@ -1928,9 +1928,8 @@ static void raid_run_ops(struct stripe_head *sh, unsigned long ops_request)
 	struct raid5_percpu *percpu;
 	unsigned long cpu;
 
-	cpu = get_cpu_light();
+	cpu = get_cpu();
 	percpu = per_cpu_ptr(conf->percpu, cpu);
-	spin_lock(&percpu->lock);
 	if (test_bit(STRIPE_OP_BIOFILL, &ops_request)) {
 		ops_run_biofill(sh);
 		overlap_clear++;
@@ -1986,8 +1985,7 @@ static void raid_run_ops(struct stripe_head *sh, unsigned long ops_request)
 			if (test_and_clear_bit(R5_Overlap, &dev->flags))
 				wake_up(&sh->raid_conf->wait_for_overlap);
 		}
-	spin_unlock(&percpu->lock);
-	put_cpu_light();
+	put_cpu();
 }
 
 static struct stripe_head *alloc_stripe(struct kmem_cache *sc, gfp_t gfp,
@@ -2255,10 +2253,6 @@ static int resize_stripes(struct r5conf *conf, int newsize)
 		err = -ENOMEM;
 
 	mutex_unlock(&conf->cache_size_mutex);
-
-	conf->slab_cache = sc;
-	conf->active_name = 1-conf->active_name;
-
 	/* Step 4, return new stripes to service */
 	while(!list_empty(&newstripes)) {
 		nsh = list_entry(newstripes.next, struct stripe_head, lru);
@@ -2276,6 +2270,8 @@ static int resize_stripes(struct r5conf *conf, int newsize)
 	}
 	/* critical section pass, GFP_NOIO no longer needed */
 
+	conf->slab_cache = sc;
+	conf->active_name = 1-conf->active_name;
 	if (!err)
 		conf->pool_size = newsize;
 	return err;
@@ -5302,15 +5298,12 @@ static void raid5_make_request(struct mddev *mddev, struct bio * bi)
 				 * userspace, we want an interruptible
 				 * wait.
 				 */
+				flush_signals(current);
 				prepare_to_wait(&conf->wait_for_overlap,
 						&w, TASK_INTERRUPTIBLE);
 				if (logical_sector >= mddev->suspend_lo &&
 				    logical_sector < mddev->suspend_hi) {
-					sigset_t full, old;
-					sigfillset(&full);
-					sigprocmask(SIG_BLOCK, &full, &old);
 					schedule();
-					sigprocmask(SIG_SETMASK, &old, NULL);
 					do_prepare = true;
 				}
 				goto retry;
@@ -5845,8 +5838,6 @@ static void raid5_do_work(struct work_struct *work)
 	pr_debug("%d stripes handled\n", handled);
 
 	spin_unlock_irq(&conf->device_lock);
-
-	async_tx_issue_pending_all();
 	blk_finish_plug(&plug);
 
 	pr_debug("--- raid5worker inactive\n");
@@ -6400,7 +6391,6 @@ static int raid456_cpu_up_prepare(unsigned int cpu, struct hlist_node *node)
 		       __func__, cpu);
 		return -ENOMEM;
 	}
-	spin_lock_init(&per_cpu_ptr(conf->percpu, cpu)->lock);
 	return 0;
 }
 
@@ -6411,6 +6401,7 @@ static int raid5_alloc_percpu(struct r5conf *conf)
 	conf->percpu = alloc_percpu(struct raid5_percpu);
 	if (!conf->percpu)
 		return -ENOMEM;
+
 	err = cpuhp_state_add_instance(CPUHP_MD_RAID5_PREPARE, &conf->node);
 	if (!err) {
 		conf->scribble_disks = max(conf->raid_disks,
@@ -7564,10 +7555,12 @@ static void end_reshape(struct r5conf *conf)
 {
 
 	if (!test_bit(MD_RECOVERY_INTR, &conf->mddev->recovery)) {
+		struct md_rdev *rdev;
 
 		spin_lock_irq(&conf->device_lock);
 		conf->previous_raid_disks = conf->raid_disks;
-		md_finish_reshape(conf->mddev);
+		rdev_for_each(rdev, conf->mddev)
+			rdev->data_offset = rdev->new_data_offset;
 		smp_wmb();
 		conf->reshape_progress = MaxSector;
 		conf->mddev->reshape_position = MaxSector;

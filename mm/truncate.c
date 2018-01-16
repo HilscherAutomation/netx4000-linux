@@ -62,12 +62,9 @@ static void clear_exceptional_entry(struct address_space *mapping,
 	 * protected by mapping->tree_lock.
 	 */
 	if (!workingset_node_shadows(node) &&
-	    !list_empty(&node->private_list)) {
-		local_lock(workingset_shadow_lock);
-		list_lru_del(&__workingset_shadow_nodes,
+	    !list_empty(&node->private_list))
+		list_lru_del(&workingset_shadow_nodes,
 				&node->private_list);
-		local_unlock(workingset_shadow_lock);
-	}
 	__radix_tree_delete_node(&mapping->page_tree, node);
 unlock:
 	spin_unlock_irq(&mapping->tree_lock);
@@ -756,7 +753,7 @@ EXPORT_SYMBOL(truncate_setsize);
  */
 void pagecache_isize_extended(struct inode *inode, loff_t from, loff_t to)
 {
-	int bsize = i_blocksize(inode);
+	int bsize = 1 << inode->i_blkbits;
 	loff_t rounded_from;
 	struct page *page;
 	pgoff_t index;

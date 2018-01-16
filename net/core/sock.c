@@ -138,7 +138,10 @@
 
 #include <trace/events/sock.h>
 
+#ifdef CONFIG_INET
 #include <net/tcp.h>
+#endif
+
 #include <net/busy_poll.h>
 
 static DEFINE_MUTEX(proto_list_mutex);
@@ -1684,24 +1687,28 @@ EXPORT_SYMBOL(skb_set_owner_w);
  * delay queue. We want to allow the owner socket to send more
  * packets, as if they were already TX completed by a typical driver.
  * But we also want to keep skb->sk set because some packet schedulers
- * rely on it (sch_fq for example).
+ * rely on it (sch_fq for example). So we set skb->truesize to a small
+ * amount (1) and decrease sk_wmem_alloc accordingly.
  */
 void skb_orphan_partial(struct sk_buff *skb)
 {
-	if (skb_is_tcp_pure_ack(skb))
+	/* If this skb is a TCP pure ACK or already went here,
+	 * we have nothing to do. 2 is already a very small truesize.
+	 */
+	if (skb->truesize <= 2)
 		return;
 
+	/* TCP stack sets skb->ooo_okay based on sk_wmem_alloc,
+	 * so we do not completely orphan skb, but transfert all
+	 * accounted bytes but one, to avoid unexpected reorders.
+	 */
 	if (skb->destructor == sock_wfree
 #ifdef CONFIG_INET
 	    || skb->destructor == tcp_wfree
 #endif
 		) {
-		struct sock *sk = skb->sk;
-
-		if (atomic_inc_not_zero(&sk->sk_refcnt)) {
-			atomic_sub(skb->truesize, &sk->sk_wmem_alloc);
-			skb->destructor = sock_efree;
-		}
+		atomic_sub(skb->truesize - 1, &skb->sk->sk_wmem_alloc);
+		skb->truesize = 1;
 	} else {
 		skb_orphan(skb);
 	}
@@ -2492,11 +2499,12 @@ void lock_sock_nested(struct sock *sk, int subclass)
 	if (sk->sk_lock.owned)
 		__lock_sock(sk);
 	sk->sk_lock.owned = 1;
-	spin_unlock_bh(&sk->sk_lock.slock);
+	spin_unlock(&sk->sk_lock.slock);
 	/*
 	 * The sk_lock has mutex_lock() semantics here:
 	 */
 	mutex_acquire(&sk->sk_lock.dep_map, subclass, 0, _RET_IP_);
+	local_bh_enable();
 }
 EXPORT_SYMBOL(lock_sock_nested);
 

@@ -182,12 +182,11 @@ static int pset_prop_read_string(struct property_set *pset,
 	return 0;
 }
 
-struct fwnode_handle *dev_fwnode(struct device *dev)
+static inline struct fwnode_handle *dev_fwnode(struct device *dev)
 {
 	return IS_ENABLED(CONFIG_OF) && dev->of_node ?
 		&dev->of_node->fwnode : dev->fwnode;
 }
-EXPORT_SYMBOL_GPL(dev_fwnode);
 
 /**
  * device_property_present - check if a property of a device is present

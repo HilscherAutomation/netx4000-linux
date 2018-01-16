@@ -292,18 +292,11 @@ static void unmap_stage2_range(struct kvm *kvm, phys_addr_t start, u64 size)
 	phys_addr_t addr = start, end = start + size;
 	phys_addr_t next;
 
-	assert_spin_locked(&kvm->mmu_lock);
 	pgd = kvm->arch.pgd + stage2_pgd_index(addr);
 	do {
 		next = stage2_pgd_addr_end(addr, end);
 		if (!stage2_pgd_none(*pgd))
 			unmap_stage2_puds(kvm, pgd, addr, next);
-		/*
-		 * If the range is too large, release the kvm->mmu_lock
-		 * to prevent starvation and lockup detector warnings.
-		 */
-		if (next != end)
-			cond_resched_lock(&kvm->mmu_lock);
 	} while (pgd++, addr = next, addr != end);
 }
 
@@ -810,7 +803,6 @@ void stage2_unmap_vm(struct kvm *kvm)
 	int idx;
 
 	idx = srcu_read_lock(&kvm->srcu);
-	down_read(&current->mm->mmap_sem);
 	spin_lock(&kvm->mmu_lock);
 
 	slots = kvm_memslots(kvm);
@@ -818,7 +810,6 @@ void stage2_unmap_vm(struct kvm *kvm)
 		stage2_unmap_memslot(kvm, memslot);
 
 	spin_unlock(&kvm->mmu_lock);
-	up_read(&current->mm->mmap_sem);
 	srcu_read_unlock(&kvm->srcu, idx);
 }
 
@@ -829,22 +820,19 @@ void stage2_unmap_vm(struct kvm *kvm)
  * Walks the level-1 page table pointed to by kvm->arch.pgd and frees all
  * underlying level-2 and level-3 tables before freeing the actual level-1 table
  * and setting the struct pointer to NULL.
+ *
+ * Note we don't need locking here as this is only called when the VM is
+ * destroyed, which can only be done once.
  */
 void kvm_free_stage2_pgd(struct kvm *kvm)
 {
-	void *pgd = NULL;
+	if (kvm->arch.pgd == NULL)
+		return;
 
-	spin_lock(&kvm->mmu_lock);
-	if (kvm->arch.pgd) {
-		unmap_stage2_range(kvm, 0, KVM_PHYS_SIZE);
-		pgd = kvm->arch.pgd;
-		kvm->arch.pgd = NULL;
-	}
-	spin_unlock(&kvm->mmu_lock);
-
+	unmap_stage2_range(kvm, 0, KVM_PHYS_SIZE);
 	/* Free the HW pgd, one page at a time */
-	if (pgd)
-		free_pages_exact(pgd, S2_PGD_SIZE);
+	free_pages_exact(kvm->arch.pgd, S2_PGD_SIZE);
+	kvm->arch.pgd = NULL;
 }
 
 static pud_t *stage2_get_pud(struct kvm *kvm, struct kvm_mmu_memory_cache *cache,
@@ -872,9 +860,6 @@ static pmd_t *stage2_get_pmd(struct kvm *kvm, struct kvm_mmu_memory_cache *cache
 	pmd_t *pmd;
 
 	pud = stage2_get_pud(kvm, cache, addr);
-	if (!pud)
-		return NULL;
-
 	if (stage2_pud_none(*pud)) {
 		if (!cache)
 			return NULL;
@@ -1664,16 +1649,12 @@ static int kvm_test_age_hva_handler(struct kvm *kvm, gpa_t gpa, void *data)
 
 int kvm_age_hva(struct kvm *kvm, unsigned long start, unsigned long end)
 {
-	if (!kvm->arch.pgd)
-		return 0;
 	trace_kvm_age_hva(start, end);
 	return handle_hva_to_gpa(kvm, start, end, kvm_age_hva_handler, NULL);
 }
 
 int kvm_test_age_hva(struct kvm *kvm, unsigned long hva)
 {
-	if (!kvm->arch.pgd)
-		return 0;
 	trace_kvm_test_age_hva(hva);
 	return handle_hva_to_gpa(kvm, hva, hva, kvm_test_age_hva_handler, NULL);
 }
@@ -1823,7 +1804,6 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 	    (KVM_PHYS_SIZE >> PAGE_SHIFT))
 		return -EFAULT;
 
-	down_read(&current->mm->mmap_sem);
 	/*
 	 * A memory region could potentially cover multiple VMAs, and any holes
 	 * between them, so iterate over all of them to find out if we can map
@@ -1867,10 +1847,8 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 			pa += vm_start - vma->vm_start;
 
 			/* IO region dirty page logging not allowed */
-			if (memslot->flags & KVM_MEM_LOG_DIRTY_PAGES) {
-				ret = -EINVAL;
-				goto out;
-			}
+			if (memslot->flags & KVM_MEM_LOG_DIRTY_PAGES)
+				return -EINVAL;
 
 			ret = kvm_phys_addr_ioremap(kvm, gpa, pa,
 						    vm_end - vm_start,
@@ -1882,7 +1860,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 	} while (hva < reg_end);
 
 	if (change == KVM_MR_FLAGS_ONLY)
-		goto out;
+		return ret;
 
 	spin_lock(&kvm->mmu_lock);
 	if (ret)
@@ -1890,8 +1868,6 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 	else
 		stage2_flush_memslot(kvm, memslot);
 	spin_unlock(&kvm->mmu_lock);
-out:
-	up_read(&current->mm->mmap_sem);
 	return ret;
 }
 

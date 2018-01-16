@@ -400,7 +400,6 @@ static int sst_acpi_remove(struct platform_device *pdev)
 static unsigned long cht_machine_id;
 
 #define CHT_SURFACE_MACH 1
-#define BYT_THINKPAD_10  2
 
 static int cht_surface_quirk_cb(const struct dmi_system_id *id)
 {
@@ -408,23 +407,6 @@ static int cht_surface_quirk_cb(const struct dmi_system_id *id)
 	return 1;
 }
 
-static int byt_thinkpad10_quirk_cb(const struct dmi_system_id *id)
-{
-	cht_machine_id = BYT_THINKPAD_10;
-	return 1;
-}
-
-
-static const struct dmi_system_id byt_table[] = {
-	{
-		.callback = byt_thinkpad10_quirk_cb,
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20C3001VHH"),
-		},
-	},
-	{ }
-};
 
 static const struct dmi_system_id cht_table[] = {
 	{
@@ -442,10 +424,6 @@ static struct sst_acpi_mach cht_surface_mach = {
 	"10EC5640", "cht-bsw-rt5645", "intel/fw_sst_22a8.bin", "cht-bsw", NULL,
 								&chv_platform_data };
 
-static struct sst_acpi_mach byt_thinkpad_10 = {
-	"10EC5640", "cht-bsw-rt5672", "intel/fw_sst_0f28.bin", "cht-bsw", NULL,
-	                                                        &byt_rvp_platform_data };
-
 static struct sst_acpi_mach *cht_quirk(void *arg)
 {
 	struct sst_acpi_mach *mach = arg;
@@ -458,21 +436,8 @@ static struct sst_acpi_mach *cht_quirk(void *arg)
 		return mach;
 }
 
-static struct sst_acpi_mach *byt_quirk(void *arg)
-{
-	struct sst_acpi_mach *mach = arg;
-
-	dmi_check_system(byt_table);
-
-	if (cht_machine_id == BYT_THINKPAD_10)
-		return &byt_thinkpad_10;
-	else
-		return mach;
-}
-
-
 static struct sst_acpi_mach sst_acpi_bytcr[] = {
-	{"10EC5640", "bytcr_rt5640", "intel/fw_sst_0f28.bin", "bytcr_rt5640", byt_quirk,
+	{"10EC5640", "bytcr_rt5640", "intel/fw_sst_0f28.bin", "bytcr_rt5640", NULL,
 						&byt_rvp_platform_data },
 	{"10EC5642", "bytcr_rt5640", "intel/fw_sst_0f28.bin", "bytcr_rt5640", NULL,
 						&byt_rvp_platform_data },

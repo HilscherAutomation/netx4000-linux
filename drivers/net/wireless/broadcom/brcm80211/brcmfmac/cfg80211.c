@@ -4928,11 +4928,6 @@ brcmf_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
 		cfg80211_mgmt_tx_status(wdev, *cookie, buf, len, true,
 					GFP_KERNEL);
 	} else if (ieee80211_is_action(mgmt->frame_control)) {
-		if (len > BRCMF_FIL_ACTION_FRAME_SIZE + DOT11_MGMT_HDR_LEN) {
-			brcmf_err("invalid action frame length\n");
-			err = -EINVAL;
-			goto exit;
-		}
 		af_params = kzalloc(sizeof(*af_params), GFP_KERNEL);
 		if (af_params == NULL) {
 			brcmf_err("unable to allocate frame\n");
@@ -5918,6 +5913,7 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 	u32 i, j;
 	u32 total;
 	u32 chaninfo;
+	u32 index;
 
 	pbuf = kzalloc(BRCMF_DCMD_MEDLEN, GFP_KERNEL);
 
@@ -5965,36 +5961,33 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 		    ch.bw == BRCMU_CHAN_BW_80)
 			continue;
 
-		channel = NULL;
+		channel = band->channels;
+		index = band->n_channels;
 		for (j = 0; j < band->n_channels; j++) {
-			if (band->channels[j].hw_value == ch.control_ch_num) {
-				channel = &band->channels[j];
+			if (channel[j].hw_value == ch.control_ch_num) {
+				index = j;
 				break;
 			}
 		}
-		if (!channel) {
-			/* It seems firmware supports some channel we never
-			 * considered. Something new in IEEE standard?
-			 */
-			brcmf_err("Ignoring unexpected firmware channel %d\n",
-				  ch.control_ch_num);
-			continue;
-		}
+		channel[index].center_freq =
+			ieee80211_channel_to_frequency(ch.control_ch_num,
+						       band->band);
+		channel[index].hw_value = ch.control_ch_num;
 
 		/* assuming the chanspecs order is HT20,
 		 * HT40 upper, HT40 lower, and VHT80.
 		 */
 		if (ch.bw == BRCMU_CHAN_BW_80) {
-			channel->flags &= ~IEEE80211_CHAN_NO_80MHZ;
+			channel[index].flags &= ~IEEE80211_CHAN_NO_80MHZ;
 		} else if (ch.bw == BRCMU_CHAN_BW_40) {
-			brcmf_update_bw40_channel_flag(channel, &ch);
+			brcmf_update_bw40_channel_flag(&channel[index], &ch);
 		} else {
 			/* enable the channel and disable other bandwidths
 			 * for now as mentioned order assure they are enabled
 			 * for subsequent chanspecs.
 			 */
-			channel->flags = IEEE80211_CHAN_NO_HT40 |
-					 IEEE80211_CHAN_NO_80MHZ;
+			channel[index].flags = IEEE80211_CHAN_NO_HT40 |
+					       IEEE80211_CHAN_NO_80MHZ;
 			ch.bw = BRCMU_CHAN_BW_20;
 			cfg->d11inf.encchspec(&ch);
 			chaninfo = ch.chspec;
@@ -6002,11 +5995,11 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 						       &chaninfo);
 			if (!err) {
 				if (chaninfo & WL_CHAN_RADAR)
-					channel->flags |=
+					channel[index].flags |=
 						(IEEE80211_CHAN_RADAR |
 						 IEEE80211_CHAN_NO_IR);
 				if (chaninfo & WL_CHAN_PASSIVE)
-					channel->flags |=
+					channel[index].flags |=
 						IEEE80211_CHAN_NO_IR;
 			}
 		}
@@ -6876,7 +6869,7 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 	wiphy = wiphy_new(ops, sizeof(struct brcmf_cfg80211_info));
 	if (!wiphy) {
 		brcmf_err("Could not allocate wiphy device\n");
-		goto ops_out;
+		return NULL;
 	}
 	memcpy(wiphy->perm_addr, drvr->mac, ETH_ALEN);
 	set_wiphy_dev(wiphy, busdev);
@@ -7010,7 +7003,6 @@ priv_out:
 	ifp->vif = NULL;
 wiphy_out:
 	brcmf_free_wiphy(wiphy);
-ops_out:
 	kfree(ops);
 	return NULL;
 }

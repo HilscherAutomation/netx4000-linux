@@ -94,10 +94,10 @@ __setup("noexec32=", nonx32_setup);
  */
 void sync_global_pgds(unsigned long start, unsigned long end, int removed)
 {
-	unsigned long addr;
+	unsigned long address;
 
-	for (addr = start; addr <= end; addr = ALIGN(addr + 1, PGDIR_SIZE)) {
-		const pgd_t *pgd_ref = pgd_offset_k(addr);
+	for (address = start; address <= end; address += PGDIR_SIZE) {
+		const pgd_t *pgd_ref = pgd_offset_k(address);
 		struct page *page;
 
 		/*
@@ -113,7 +113,7 @@ void sync_global_pgds(unsigned long start, unsigned long end, int removed)
 			pgd_t *pgd;
 			spinlock_t *pgt_lock;
 
-			pgd = (pgd_t *)page_address(page) + pgd_index(addr);
+			pgd = (pgd_t *)page_address(page) + pgd_index(address);
 			/* the pgt_lock only for Xen */
 			pgt_lock = &pgd_page_get_mm(page)->page_table_lock;
 			spin_lock(pgt_lock);

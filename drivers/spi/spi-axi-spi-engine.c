@@ -494,8 +494,7 @@ static int spi_engine_probe(struct platform_device *pdev)
 			SPI_ENGINE_VERSION_MAJOR(version),
 			SPI_ENGINE_VERSION_MINOR(version),
 			SPI_ENGINE_VERSION_PATCH(version));
-		ret = -ENODEV;
-		goto err_put_master;
+		return -ENODEV;
 	}
 
 	spi_engine->clk = devm_clk_get(&pdev->dev, "s_axi_aclk");
