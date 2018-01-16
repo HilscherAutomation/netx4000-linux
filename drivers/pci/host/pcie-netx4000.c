@@ -129,8 +129,6 @@ struct netx4000_pcie_priv {
 	enum of_gpio_flags gpio_reset_flags;
 	int gpio_clkreq;
 	enum of_gpio_flags gpio_clkreq_flags;
-	int gpio_wake;
-	enum of_gpio_flags gpio_wake_flags;
 
 	struct netx4000_pcie_msi_priv *msi;
 
@@ -138,17 +136,17 @@ struct netx4000_pcie_priv {
 };
 
 #define PCIE_RESET_DELAY_US	(1000)
-static void netx4000_pcie_reset_deassert(struct netx4000_pcie_priv *priv)
+static int netx4000_pcie_reset_deassert(struct netx4000_pcie_priv *priv)
 {
-	/* FIXME: Check is unnecessary */
 	if (!gpio_is_valid(priv->gpio_reset)) {
-		dev_err(priv->dev, "Error: Invalid reset-gpio!\n");
-		return;
+		return -ENODEV;
 	}
 
 	gpio_set_value(priv->gpio_reset, (priv->gpio_reset_flags & OF_GPIO_ACTIVE_LOW) ? 1 : 0);
 
 	usleep_range(PCIE_RESET_DELAY_US, PCIE_RESET_DELAY_US + 500);
+
+	return 0;
 }
 
 static int netx4000_pcie_wait_for_clkreq(struct netx4000_pcie_priv *priv, u32 timeout_ms)
@@ -156,9 +154,7 @@ static int netx4000_pcie_wait_for_clkreq(struct netx4000_pcie_priv *priv, u32 ti
 	unsigned long start_jiffies = jiffies;
 	u32 clkreq;
 
-	/* FIXME: Check is unnecessary */
 	if (!gpio_is_valid(priv->gpio_clkreq)) {
-		dev_err(priv->dev, "Error: Invalid clkreq-gpio!\n");
 		return -ENODEV;
 	}
 
@@ -682,14 +678,7 @@ static void netx4000_pcie_core_init(struct netx4000_pcie_priv *priv,
 	netx4000_pcie_reset_deassert(priv);
 
 	/* Wait for CLKREQn to assert, before enabling core */
-	err = netx4000_pcie_wait_for_clkreq(priv, 500 /* ms */);
-	if (err == -ETIMEDOUT) {
-		dev_err(priv->dev, "Enabling clock, before device requests clocks.\n");
-	}
-	else if (err == -ENODEV) {
-		dev_err(priv->dev, "Enabling clock after 250ms, as clkreq is not available.\n");
-		msleep(250);
-	}
+	netx4000_pcie_wait_for_clkreq(priv, 500 /* ms */);
 
 	/* Reset must be deasserted at least 5ms later than enabling port (see chapter 6.15.2) */
 	mdelay(5);
@@ -763,36 +752,32 @@ static int netx4000_pcie_parse_dt(struct platform_device *pdev)
 
 	priv->gpio_reset = of_get_named_gpio_flags(pdev->dev.of_node, "reset-gpio", 0, &priv->gpio_reset_flags);
 	if (priv->gpio_reset < 0) {
-		dev_err(&pdev->dev, "Error retrieving gpio 'reset-gpio' from DT.\n");
-		return priv->gpio_reset;
+		dev_warn(&pdev->dev, "Error retrieving gpio 'reset-gpio' from DT.\n");
 	}
-	if ((!gpio_is_valid(priv->gpio_reset)) || (devm_gpio_request(&pdev->dev, priv->gpio_reset, "pcie-reset") < 0)) {
-		dev_err(&pdev->dev, "Error requesting reset-gpio (%d).\n", priv->gpio_reset);
-		return -EINVAL;
+	else {
+		if ((!gpio_is_valid(priv->gpio_reset)) || (devm_gpio_request(&pdev->dev, priv->gpio_reset, "pcie-reset") < 0)) {
+			dev_err(&pdev->dev, "Error requesting reset-gpio (%d).\n", priv->gpio_reset);
+			return -EINVAL;
+		}
+		else {
+			gpio_direction_output(priv->gpio_reset, (priv->gpio_reset_flags & OF_GPIO_ACTIVE_LOW) ? 0 : 1);
+		}
 	}
-	gpio_direction_output(priv->gpio_reset, (priv->gpio_reset_flags & OF_GPIO_ACTIVE_LOW) ? 0 : 1);
 
+	/* NOTE: The clkreq is normally connected to hardware clock provider. */
 	priv->gpio_clkreq = of_get_named_gpio_flags(pdev->dev.of_node, "clkreq-gpio", 0, &priv->gpio_clkreq_flags);
 	if (priv->gpio_clkreq < 0) {
-		dev_err(&pdev->dev, "Error retrieving gpio 'clkreq-gpio' from DT.\n");
-		return priv->gpio_clkreq;
+		dev_dbg(&pdev->dev, "Error retrieving gpio 'clkreq-gpio' from DT.\n");
 	}
-	if ((!gpio_is_valid(priv->gpio_clkreq)) || (devm_gpio_request(&pdev->dev, priv->gpio_clkreq, "pcie-clkreq") < 0)) {
-		dev_err(&pdev->dev, "Error requesting clkreq-gpio (%d).\n", priv->gpio_clkreq);
-		return -EINVAL;
+	else {
+		if ((!gpio_is_valid(priv->gpio_clkreq)) || (devm_gpio_request(&pdev->dev, priv->gpio_clkreq, "pcie-clkreq") < 0)) {
+			dev_err(&pdev->dev, "Error requesting clkreq-gpio (%d).\n", priv->gpio_clkreq);
+			return -EINVAL;
+		}
+		else {
+			gpio_direction_input(priv->gpio_clkreq);
+		}
 	}
-	gpio_direction_input(priv->gpio_clkreq);
-
-	priv->gpio_wake = of_get_named_gpio_flags(pdev->dev.of_node, "wake-gpio", 0, &priv->gpio_wake_flags);
-	if (priv->gpio_clkreq < 0) {
-		dev_err(&pdev->dev, "Error retrieving gpio 'wake-gpio' from DT.\n");
-		return priv->gpio_wake;
-	}
-	if ((!gpio_is_valid(priv->gpio_wake)) || (devm_gpio_request(&pdev->dev, priv->gpio_wake, "pcie-wake") < 0)) {
-		dev_err(&pdev->dev, "Error requesting wake-gpio (%d).\n", priv->gpio_wake);
-		return -EINVAL;
-	}
-	gpio_direction_input(priv->gpio_wake);
 
 	return 0;
 }
