@@ -21,6 +21,8 @@
 #define DRIVER_DESC  "PCIe host controller driver for Hilscher netx4000 based platforms"
 #define DRIVER_NAME  "pcierc-netx4000"
 
+#include <mach/hardware.h>
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
@@ -31,7 +33,7 @@
 #include <linux/clk.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
-#include <mach/hardware.h>
+
 
 /* PCI -> AXI */
 #define OFFS_AXI_WINx_BASE(x)		(0x00 | (x<<4)) /* 0x00, 0x10, 0x20, 30 */
@@ -252,7 +254,7 @@ static void netx4000_pcie_all_isr(struct irq_desc *desc)
 			dev_err(priv->dev, "Error receiving unexpected MSI IRQ (%d).\n", hwIrq);
 	}
 	else {
-		dev_err(priv->dev, "Error receiving unexpected IRQ (irqStatus 0x%x).\n", irqStatus);
+		dev_err(priv->dev, "Error receiving unexpected IRQ (irqStatus 0x%lx).\n", irqStatus);
 	}
 
 	chained_irq_exit(chip, desc);
@@ -816,14 +818,17 @@ static void netx4000_pcie_core_disable(struct netx4000_pcie_priv *priv)
 static int netx4000_pcie_probe(struct platform_device *pdev)
 {
 	struct netx4000_pcie_priv *priv;
-	struct pci_bus *bus;
+	struct pci_bus *bus, *child;
+	struct pci_host_bridge *bridge;
 	int err;
 
-	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv) {
-		dev_err(&pdev->dev, "Error allocating private structure.\n");
+	bridge = devm_pci_alloc_host_bridge(&pdev->dev, sizeof(*priv));
+	if (!bridge) {
+		dev_err(&pdev->dev, "Error allocating PCI host bridge structure.\n");
 		return -ENOMEM;
 	}
+
+	priv = pci_host_bridge_priv(bridge);
 
 	platform_set_drvdata(pdev, priv);
 
@@ -862,16 +867,26 @@ static int netx4000_pcie_probe(struct platform_device *pdev)
 		}
 	}
 
-	bus = pci_create_root_bus(&pdev->dev, 0, &pci_netx4000_ops, priv, &priv->pci_res);
-	if (!bus) {
-		dev_err(&pdev->dev, "Error creating root bus.\n");
-		err = -ENOMEM;
-		goto err_out;
+	list_splice_init(&priv->pci_res, &bridge->windows);
+	bridge->dev.parent = &pdev->dev;
+	bridge->sysdata = priv;
+	bridge->busnr = priv->busnr;
+	bridge->ops = &pci_netx4000_ops;
+	bridge->map_irq = of_irq_parse_and_map_pci;
+	bridge->swizzle_irq = pci_common_swizzle;
+
+	err = pci_scan_root_bus_bridge(bridge);
+	if (err) {
+		dev_err(&pdev->dev, "Error: pci_scan_root_bus_bridge() failed!\n");
+		return err;
 	}
+
+	bus = bridge->bus;
 
 	pci_scan_child_bus(bus);
 	pci_assign_unassigned_bus_resources(bus);
-	pci_fixup_irqs(pci_common_swizzle, of_irq_parse_and_map_pci);
+	list_for_each_entry(child, &bus->children, node)
+		pcie_bus_configure_settings(child);
 	pci_bus_add_devices(bus);
 
 	dev_info(&pdev->dev, "successfully initialized!\n");
