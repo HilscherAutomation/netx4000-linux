@@ -19,7 +19,11 @@
 */
 
 #define DRIVER_DESC  "USB HCD driver for Hilscher netx4000 based platforms"
-#define DRIVER_NAME "hcd-netx4000"
+#define DRIVER_NAME  "hcd-netx4000"
+
+#include <linux/types.h>
+#include <mach/hardware.h>
+#include <mach/platform.h>
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -31,8 +35,6 @@
 #include <linux/usb/ehci_pdriver.h>
 #include <linux/usb/ohci_pdriver.h>
 
-#include <mach/hardware.h>
-#include <mach/platform.h>
 
 struct netx4000_priv {
 	struct platform_device *pdev;
