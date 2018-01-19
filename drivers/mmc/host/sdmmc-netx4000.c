@@ -21,6 +21,10 @@
 #define DRIVER_DESC  "SD/MMC driver for Hilscher netx4000 based platforms"
 #define DRIVER_NAME  "sdmmc-netx4000"
 
+#include <linux/types.h>
+#include <mach/hardware.h>
+#include <mach/platform.h>
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/version.h>
@@ -30,14 +34,13 @@
 #include <linux/of.h>
 #include <linux/of_dma.h>
 #include <linux/mmc/host.h>
-#include <linux/irq.h>
+#include <linux/interrupt.h>
 #include <linux/scatterlist.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-direction.h>
 #include <asm/highmem.h>
-#include <mach/hardware.h>
-#include <mach/platform.h>
+
 #ifdef CONFIG_CRC7
 	#include <linux/crc7.h>
 #endif
