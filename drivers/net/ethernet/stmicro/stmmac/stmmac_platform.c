@@ -344,6 +344,9 @@ static int stmmac_dt_phy(struct plat_stmmacenet_data *plat,
 		dev_dbg(dev, "Found MDIO subnode\n");
 		mdio = true;
 	}
+	else {
+		mdio = false;
+	}
 
 	if (mdio) {
 		plat->mdio_bus_data =
