@@ -427,6 +427,8 @@
 			compatible = "hilscher,netx4000-i2c";
 			reg = <0xf801b800 0x100>;
 			interrupts = <GIC_SPI (130-32) IRQ_TYPE_LEVEL_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c0_pins>;
 		};
 
 		i2c1: i2c@f801b900 {
@@ -434,6 +436,8 @@
 			compatible = "hilscher,netx4000-i2c";
 			reg = <0xf801b900 0x100>;
 			interrupts = <GIC_SPI (131-32) IRQ_TYPE_LEVEL_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c1_pins>;
 		};
 
 		i2c2: i2c@f801ba00 {
@@ -441,6 +445,8 @@
 			compatible = "hilscher,netx4000-i2c";
 			reg = <0xf801ba00 0x100>;
 			interrupts = <GIC_SPI (132-32) IRQ_TYPE_LEVEL_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c2_pins>;
 		};
 
 		i2c3: i2c@f801bb00 {
@@ -448,6 +454,8 @@
 			compatible = "hilscher,netx4000-i2c";
 			reg = <0xf801bb00 0x100>;
 			interrupts = <GIC_SPI (133-32) IRQ_TYPE_LEVEL_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c3_pins>;
 		};
 
 		i2c4: i2c@f801bc00 {
@@ -455,6 +463,8 @@
 			compatible = "hilscher,netx4000-i2c";
 			reg = <0xf801bc00 0x100>;
 			interrupts = <GIC_SPI (134-32) IRQ_TYPE_LEVEL_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c4_pins>;
 		};
 
 		i2c5: i2c@f801bd00 {
@@ -462,6 +472,8 @@
 			compatible = "hilscher,netx4000-i2c";
 			reg = <0xf801bd00 0x100>;
 			interrupts = <GIC_SPI (135-32) IRQ_TYPE_LEVEL_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c5_pins>;
 		};
 
 		/* ADC */
@@ -785,6 +797,48 @@
 		pinctrl-single,pins = <
 			MUX_PIN(5,4)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // RXD
 			MUX_PIN(5,5)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // TXD
+		>;
+	};
+
+	i2c0_pins: i2c0_pins {
+		pinctrl-single,pins = <
+			MUX_PIN(2,0)  (REEMUX_0 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // scl / gpio4_26
+			MUX_PIN(2,1)  (REEMUX_0 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // sda / gpio4_27
+		>;
+	};
+
+	i2c1_pins: i2c1_pins {
+		pinctrl-single,pins = <
+			MUX_PIN(4,8)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // scl / gpio1_8
+			MUX_PIN(4,9)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // sda / gpio1_9
+		>;
+	};
+
+	i2c2_pins: i2c2_pins {
+		pinctrl-single,pins = <
+			MUX_PIN(16,8)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)  // scl / gpio4_22
+			MUX_PIN(16,9)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)  // sda / gpio4_23
+		>;
+	};
+
+	i2c3_pins: i2c3_pins {
+		pinctrl-single,pins = <
+			MUX_PIN(16,10)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K) // scl / gpio4_24
+			MUX_PIN(16,11)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K) // sda / gpio4_25
+		>;
+	};
+
+	i2c4_pins: i2c4_pins {
+		pinctrl-single,pins = <
+			MUX_PIN(6,0)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // scl / gpio2_16
+			MUX_PIN(6,1)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // sda / gpio2_17
+		>;
+	};
+
+	i2c5_pins: i2c5_pins {
+		pinctrl-single,pins = <
+			MUX_PIN(6,2)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // scl / gpio2_18
+			MUX_PIN(6,3)  (REEMUX_2 | REEMUX_DRV_06MA | REEMUX_UDC_PULLUP50K)   // sda / gpio2_19
 		>;
 	};
 
