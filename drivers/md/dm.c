@@ -1481,26 +1481,29 @@ static void flush_current_bio_list(struct blk_plug_cb *cb, bool from_schedule)
 	struct dm_offload *o = container_of(cb, struct dm_offload, cb);
 	struct bio_list list;
 	struct bio *bio;
+	int i;
 
 	INIT_LIST_HEAD(&o->cb.list);
 
 	if (unlikely(!current->bio_list))
 		return;
 
-	list = *current->bio_list;
-	bio_list_init(current->bio_list);
+	for (i = 0; i < 2; i++) {
+		list = current->bio_list[i];
+		bio_list_init(&current->bio_list[i]);
 
-	while ((bio = bio_list_pop(&list))) {
-		struct bio_set *bs = bio->bi_pool;
-		if (unlikely(!bs) || bs == fs_bio_set) {
-			bio_list_add(current->bio_list, bio);
-			continue;
+		while ((bio = bio_list_pop(&list))) {
+			struct bio_set *bs = bio->bi_pool;
+			if (unlikely(!bs) || bs == fs_bio_set) {
+				bio_list_add(&current->bio_list[i], bio);
+				continue;
+			}
+
+			spin_lock(&bs->rescue_lock);
+			bio_list_add(&bs->rescue_list, bio);
+			queue_work(bs->rescue_workqueue, &bs->rescue_work);
+			spin_unlock(&bs->rescue_lock);
 		}
-
-		spin_lock(&bs->rescue_lock);
-		bio_list_add(&bs->rescue_list, bio);
-		queue_work(bs->rescue_workqueue, &bs->rescue_work);
-		spin_unlock(&bs->rescue_lock);
 	}
 }
 
@@ -3504,11 +3507,15 @@ struct mapped_device *dm_get_from_kobject(struct kobject *kobj)
 
 	md = container_of(kobj, struct mapped_device, kobj_holder.kobj);
 
-	if (test_bit(DMF_FREEING, &md->flags) ||
-	    dm_deleting_md(md))
-		return NULL;
-
+	spin_lock(&_minor_lock);
+	if (test_bit(DMF_FREEING, &md->flags) || dm_deleting_md(md)) {
+		md = NULL;
+		goto out;
+	}
 	dm_get(md);
+out:
+	spin_unlock(&_minor_lock);
+
 	return md;
 }
 
