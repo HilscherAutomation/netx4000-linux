@@ -31,6 +31,7 @@
 #include <linux/clockchips.h>
 #include <asm/hyperv.h>
 #include <asm/mshyperv.h>
+#include <asm/nospec-branch.h>
 #include "hyperv_vmbus.h"
 
 /* The one and only */
@@ -103,9 +104,10 @@ static u64 do_hypercall(u64 control, void *input, void *output)
 		return (u64)ULLONG_MAX;
 
 	__asm__ __volatile__("mov %0, %%r8" : : "r" (output_address) : "r8");
-	__asm__ __volatile__("call *%3" : "=a" (hv_status) :
+	__asm__ __volatile__(CALL_NOSPEC :
+			     "=a" (hv_status) :
 			     "c" (control), "d" (input_address),
-			     "m" (hypercall_page));
+			     THUNK_TARGET(hypercall_page));
 
 	return hv_status;
 
@@ -123,11 +125,12 @@ static u64 do_hypercall(u64 control, void *input, void *output)
 	if (!hypercall_page)
 		return (u64)ULLONG_MAX;
 
-	__asm__ __volatile__ ("call *%8" : "=d"(hv_status_hi),
+	__asm__ __volatile__ (CALL_NOSPEC : "=d"(hv_status_hi),
 			      "=a"(hv_status_lo) : "d" (control_hi),
 			      "a" (control_lo), "b" (input_address_hi),
 			      "c" (input_address_lo), "D"(output_address_hi),
-			      "S"(output_address_lo), "m" (hypercall_page));
+			      "S"(output_address_lo),
+			      THUNK_TARGET(hypercall_page));
 
 	return hv_status_lo | ((u64)hv_status_hi << 32);
 #endif /* !x86_64 */
@@ -219,7 +222,7 @@ int hv_init(void)
 	/* See if the hypercall page is already set */
 	rdmsrl(HV_X64_MSR_HYPERCALL, hypercall_msr.as_uint64);
 
-	virtaddr = __vmalloc(PAGE_SIZE, GFP_KERNEL, PAGE_KERNEL_EXEC);
+	virtaddr = __vmalloc(PAGE_SIZE, GFP_KERNEL, PAGE_KERNEL_RX);
 
 	if (!virtaddr)
 		goto cleanup;
@@ -274,7 +277,7 @@ cleanup:
  *
  * This routine is called normally during driver unloading or exiting.
  */
-void hv_cleanup(void)
+void hv_cleanup(bool crash)
 {
 	union hv_x64_msr_hypercall_contents hypercall_msr;
 
@@ -284,7 +287,8 @@ void hv_cleanup(void)
 	if (hv_context.hypercall_page) {
 		hypercall_msr.as_uint64 = 0;
 		wrmsrl(HV_X64_MSR_HYPERCALL, hypercall_msr.as_uint64);
-		vfree(hv_context.hypercall_page);
+		if (!crash)
+			vfree(hv_context.hypercall_page);
 		hv_context.hypercall_page = NULL;
 	}
 
@@ -304,8 +308,10 @@ void hv_cleanup(void)
 
 		hypercall_msr.as_uint64 = 0;
 		wrmsrl(HV_X64_MSR_REFERENCE_TSC, hypercall_msr.as_uint64);
-		vfree(hv_context.tsc_page);
-		hv_context.tsc_page = NULL;
+		if (!crash) {
+			vfree(hv_context.tsc_page);
+			hv_context.tsc_page = NULL;
+		}
 	}
 #endif
 }

@@ -23,6 +23,7 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
+#include <linux/backing-dev.h>
 
 #include "ext4_jbd2.h"
 #include "xattr.h"
@@ -96,8 +97,7 @@ static void ext4_finish_bio(struct bio *bio)
 		 * We check all buffers in the page under BH_Uptodate_Lock
 		 * to avoid races with other end io clearing async_write flags
 		 */
-		local_irq_save(flags);
-		bit_spin_lock(BH_Uptodate_Lock, &head->b_state);
+		flags = bh_uptodate_lock_irqsave(head);
 		do {
 			if (bh_offset(bh) < bio_start ||
 			    bh_offset(bh) + bh->b_size > bio_end) {
@@ -109,8 +109,7 @@ static void ext4_finish_bio(struct bio *bio)
 			if (bio->bi_error)
 				buffer_io_error(bh);
 		} while ((bh = bh->b_this_page) != head);
-		bit_spin_unlock(BH_Uptodate_Lock, &head->b_state);
-		local_irq_restore(flags);
+		bh_uptodate_unlock_irqrestore(head, flags);
 		if (!under_io) {
 #ifdef CONFIG_EXT4_FS_ENCRYPTION
 			if (ctx)
@@ -485,9 +484,20 @@ int ext4_bio_write_page(struct ext4_io_submit *io,
 
 	if (ext4_encrypted_inode(inode) && S_ISREG(inode->i_mode) &&
 	    nr_to_submit) {
-		data_page = ext4_encrypt(inode, page);
+		gfp_t gfp_flags = GFP_NOFS;
+
+	retry_encrypt:
+		data_page = ext4_encrypt(inode, page, gfp_flags);
 		if (IS_ERR(data_page)) {
 			ret = PTR_ERR(data_page);
+			if (ret == -ENOMEM && wbc->sync_mode == WB_SYNC_ALL) {
+				if (io->io_bio) {
+					ext4_io_submit(io);
+					congestion_wait(BLK_RW_ASYNC, HZ/50);
+				}
+				gfp_flags |= __GFP_NOFAIL;
+				goto retry_encrypt;
+			}
 			data_page = NULL;
 			goto out;
 		}

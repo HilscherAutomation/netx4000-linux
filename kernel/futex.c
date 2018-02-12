@@ -1626,6 +1626,9 @@ static int futex_requeue(u32 __user *uaddr1, unsigned int flags,
 	struct futex_q *this, *next;
 	WAKE_Q(wake_q);
 
+	if (nr_wake < 0 || nr_requeue < 0)
+		return -EINVAL;
+
 	if (requeue_pi) {
 		/*
 		 * Requeue PI only works on two distinct uaddrs. This
@@ -1954,8 +1957,12 @@ static int unqueue_me(struct futex_q *q)
 
 	/* In the common case we don't take the spinlock, which is nice. */
 retry:
-	lock_ptr = q->lock_ptr;
-	barrier();
+	/*
+	 * q->lock_ptr can change between this read and the following spin_lock.
+	 * Use READ_ONCE to forbid the compiler from reloading q->lock_ptr and
+	 * optimizing lock_ptr out of the logic below.
+	 */
+	lock_ptr = READ_ONCE(q->lock_ptr);
 	if (lock_ptr != NULL) {
 		spin_lock(lock_ptr);
 		/*
@@ -2705,7 +2712,6 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 {
 	struct hrtimer_sleeper timeout, *to = NULL;
 	struct rt_mutex_waiter rt_waiter;
-	struct rt_mutex *pi_mutex = NULL;
 	struct futex_hash_bucket *hb, *hb2;
 	union futex_key key2 = FUTEX_KEY_INIT;
 	struct futex_q q = futex_q_init;
@@ -2822,6 +2828,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 			spin_lock(&hb2->lock);
 			BUG_ON(&hb2->lock != q.lock_ptr);
 			ret = fixup_pi_state_owner(uaddr2, &q, current);
+			if (ret && rt_mutex_owner(&q.pi_state->pi_mutex) == current)
+				rt_mutex_unlock(&q.pi_state->pi_mutex);
 			/*
 			 * Drop the reference to the pi state which
 			 * the requeue_pi() code acquired for us.
@@ -2830,6 +2838,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 			spin_unlock(&hb2->lock);
 		}
 	} else {
+		struct rt_mutex *pi_mutex;
+
 		/*
 		 * We have been woken up by futex_unlock_pi(), a timeout, or a
 		 * signal.  futex_unlock_pi() will not destroy the lock_ptr nor
@@ -2854,18 +2864,19 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 		if (res)
 			ret = (res < 0) ? res : 0;
 
+		/*
+		 * If fixup_pi_state_owner() faulted and was unable to handle
+		 * the fault, unlock the rt_mutex and return the fault to
+		 * userspace.
+		 */
+		if (ret && rt_mutex_owner(pi_mutex) == current)
+			rt_mutex_unlock(pi_mutex);
+
 		/* Unqueue and drop the lock. */
 		unqueue_me_pi(&q);
 	}
 
-	/*
-	 * If fixup_pi_state_owner() faulted and was unable to handle the
-	 * fault, unlock the rt_mutex and return the fault to userspace.
-	 */
-	if (ret == -EFAULT) {
-		if (pi_mutex && rt_mutex_owner(pi_mutex) == current)
-			rt_mutex_unlock(pi_mutex);
-	} else if (ret == -EINTR) {
+	if (ret == -EINTR) {
 		/*
 		 * We've already been requeued, but cannot restart by calling
 		 * futex_lock_pi() directly. We could restart this syscall, but
