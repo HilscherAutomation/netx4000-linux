@@ -134,7 +134,7 @@ void of_netx4000_periph_clk_setup(struct device_node *node)
 	of_property_read_string(node, "clock-output-names", &clk_name);
 
 	init.name = clk_name;
-	init.flags = CLK_IS_BASIC;
+	init.flags = CLK_IS_BASIC | CLK_IS_ROOT;
 	init.num_parents = 0;
 	init.ops = &netx4000_hw_clk_ops;
 
