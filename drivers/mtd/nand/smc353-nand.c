@@ -1341,7 +1341,8 @@ static int smc35x_nand_probe(struct platform_device *dev)
         
 	/* next two lines are temporarily only */
 	s_nand = nand;
-	driver_create_file(s_driver, &driver_attr_ecc_mode);
+	ret = driver_create_file(s_driver, &driver_attr_ecc_mode);
+	WARN_ON(ret);
 
 	dev_info(&dev->dev, "successfully initialized!\n");
 

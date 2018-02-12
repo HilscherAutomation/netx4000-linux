@@ -146,7 +146,7 @@ void of_netx4000_periph_clk_setup(struct device_node *node)
 
 	netx4000_hw_clk->hw.init = &init;
 
-	rc = clk_hw_register(NULL, &netx4000_hw_clk->hw);
+	rc = PTR_ERR_OR_ZERO(clk_register(NULL, &netx4000_hw_clk->hw));
 	BUG_ON(rc);
 
 	of_clk_add_provider(node, of_clk_src_simple_get, netx4000_hw_clk->hw.clk);

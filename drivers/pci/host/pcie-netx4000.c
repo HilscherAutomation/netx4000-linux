@@ -33,6 +33,34 @@
 #include <linux/delay.h>
 #include <mach/hardware.h>
 
+int devm_request_pci_bus_resources(struct device *dev,
+				   struct list_head *resources)
+{
+	struct resource_entry *win;
+	struct resource *parent, *res;
+	int err;
+
+	resource_list_for_each_entry(win, resources) {
+		res = win->res;
+		switch (resource_type(res)) {
+		case IORESOURCE_IO:
+			parent = &ioport_resource;
+			break;
+		case IORESOURCE_MEM:
+			parent = &iomem_resource;
+			break;
+		default:
+			continue;
+		}
+
+		err = devm_request_resource(dev, parent, res);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
 /* PCI -> AXI */
 #define OFFS_AXI_WINx_BASE(x)		(0x00 | (x<<4)) /* 0x00, 0x10, 0x20, 30 */
 #define OFFS_AXI_WINx_MASK(x)		(0x04 | (x<<4)) /* 0x04, 0x14, 0x24, 34 */
