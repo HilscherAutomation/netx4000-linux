@@ -884,9 +884,7 @@ static int __init netx_init_module(void)
 	platform_driver_register(&uio_netx_platform_driver);
 #endif
 	/* and pci */
-	pci_register_driver(&netx_pci_driver);
-
-	return 0;
+	return pci_register_driver(&netx_pci_driver);
 }
 
 static void __exit netx_exit_module(void)

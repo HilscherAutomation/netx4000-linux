@@ -223,8 +223,7 @@ static void netx4000_pcie_all_isr(struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	struct netx4000_pcie_priv *priv;
-	unsigned long irqStatus;
-	u32 bit, vIrq, hwIrq;
+	u32 bit, vIrq, hwIrq, irqStatus;
 
 	chained_irq_enter(chip, desc);
 	priv = irq_desc_get_handler_data(desc);
@@ -234,7 +233,7 @@ static void netx4000_pcie_all_isr(struct irq_desc *desc)
 		dev_dbg(priv->dev, "Receiving INTx IRQ\n");
 		iowrite32(INTX_RX_IRQ_STATUS, priv->regs + OFFS_RX_IRQ_STATUS);
 
-		for_each_set_bit(bit, &irqStatus, MAX_INTX) {
+		for_each_set_bit(bit, (unsigned long *)&irqStatus, MAX_INTX) {
 			vIrq = irq_find_mapping(priv->legacyIrqDomain, bit + 1);
 			if (vIrq) {
 				generic_handle_irq(vIrq);
