@@ -67,7 +67,7 @@ enum {
 #define RZ_CAN_RSCAN0CmCFG_SJW(x)	(((x) & 0x03) << 24)
 #define RZ_CAN_RSCAN0CmCFG_TSEG2(x)	(((x) & 0x07) << 20)
 #define RZ_CAN_RSCAN0CmCFG_TSEG1(x)	(((x) & 0x0f) << 16)
-#define RZ_CAN_RSCAN0CmCFG_BRP(x)	(((x) & 0x1ff) << 0)
+#define RZ_CAN_RSCAN0CmCFG_BRP(x)	(((x) & 0x3ff) << 0)
 
 #define RZ_CAN_RSCAN0GCTR		0x0088
 #define RZ_CAN_RSCAN0GCTR_GSLPR		BIT(2)
