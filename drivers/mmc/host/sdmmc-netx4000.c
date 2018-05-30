@@ -150,6 +150,14 @@ static void netx4000_hsmmc_handle_irq(struct netx4000_hsmmc_host *host);
 static int s_fNextAppCmd          = 0;
 static int s_fAutomaticBlockCount = 1;
 
+static int netx4000_wait_for_sclkdiven(struct netx4000_hsmmc_host* host)
+{
+	while (!(readl(&host->reg->sd_info2) & MSK_NX4000_SDIO_SD_INFO2_SCLKDIVEN)) {
+		/* FIXME: timeout handling */
+	}
+	return 0;
+}
+
 static int netx4000_hsmmc_card_detect(struct device *dev)
 {
 	struct netx4000_hsmmc_host *host = dev_get_drvdata(dev);
@@ -250,10 +258,12 @@ static void netx4000_hsmmc_set_clock(struct netx4000_hsmmc_host *host)
 	u32 clock = host->mmc->ios.clock;
 
 	/* do not write to clk-ctrl while SCLKDIVEN is not set */
-	while ( !(MSK_NX4000_SDIO_SD_INFO2_SCLKDIVEN & readl(&host->reg->sd_info2)) ){ndelay(1);};
+	netx4000_wait_for_sclkdiven(host);
+
 	/* disable clock */
 	writel( clock_setting, &host->reg->sd_clk_ctrl);
-	/* calculate divider */
+
+	/* calculate new clock divider ... */
 	if (clock>=max) {
 		writel( 0xFF, &host->reg->sd_clk_ctrl);
 	} else {
@@ -269,11 +279,11 @@ static void netx4000_hsmmc_set_clock(struct netx4000_hsmmc_host *host)
 		clock_setting &= ~0xFF;
 		clock_setting |= MSK_NX4000_SDIO_SD_CLK_CTRL_DIV & (div >> 2);
 	}
-	clock_setting |= MSK_NX4000_SDIO_SD_CLK_CTRL_SD_CLK_EN; /* enable clock */
+	/* ... and write it to chip */
+	writel( clock_setting | MSK_NX4000_SDIO_SD_CLK_CTRL_SD_CLK_OFFEN, &host->reg->sd_clk_ctrl);
 
-	/* do not write to clk-ctrl while SCLKDIVEN is not set */
-	while ( !(MSK_NX4000_SDIO_SD_INFO2_SCLKDIVEN & readl(&host->reg->sd_info2)) ){ndelay(1);};
-	/* set new rate */
+	/* enable clock */
+	clock_setting |= MSK_NX4000_SDIO_SD_CLK_CTRL_SD_CLK_EN;
 	writel( clock_setting | MSK_NX4000_SDIO_SD_CLK_CTRL_SD_CLK_OFFEN, &host->reg->sd_clk_ctrl);
 }
 
@@ -290,8 +300,9 @@ static void netx4000_hsmmc_set_bus_width(struct netx4000_hsmmc_host *host)
 		case MMC_BUS_WIDTH_1:
 			val |= (1 << SRT_NX4000_SDIO_SD_OPTION_WIDTH);
 			break;
-		case MMC_BUS_WIDTH_8:/* check if supported */
 		default:
+			dev_err(host->dev, "%s: Invalid bus_width (%d-bit) => defaulting to 1-bit\n", __func__, (1<<ios->bus_width));
+			val |= (1 << SRT_NX4000_SDIO_SD_OPTION_WIDTH);
 			break;
 	}
 	writel( val, &host->reg->sd_option);
@@ -333,7 +344,7 @@ static int get_resp(struct netx4000_hsmmc_host *host, struct mmc_command *cmd)
 			/* Nomal Response (32bits Length) */
 		case MMC_RSP_R1:
 			//TODO: fix MMC_RSP_R1b
-		//case MMC_RSP_R1b: /* Normal Response with an Optional Busy Signal */
+		case MMC_RSP_R1B: /* Normal Response with an Optional Busy Signal */
 		case MMC_RSP_R3: /* OCR Register (32bits Length) */
 			/* MMC_RSP_R4 MMC_RSP_R5 MMC_RSP_R6 MMC_RSP_R7 same format */
 			cmd->resp[0] = readl(&regs->sd_rsp10);
@@ -425,7 +436,6 @@ uint8_t* get_next_buffer(struct netx4000_hsmmc_host *host)
 	return (host->buf_pointer + host->sg->length - host->sg_remaining);
 }
 
-
 static int transfer_data( struct netx4000_hsmmc_host *host, struct mmc_data *data)
 {
 	uint8_t *buf = get_next_buffer(host);
@@ -504,14 +514,15 @@ static void netx4000_hsmmc_handle_irq(struct netx4000_hsmmc_host *host)
 
 	if (host->error == 0) {
 		if (host->sd_info1 & MSK_NX4000_SDIO_SD_INFO1_INFO0) { /* RESPONSE_END */
-			get_resp(host, mrq->cmd);
 			host->sd_info1 &= ~MSK_NX4000_SDIO_SD_INFO1_INFO0;
+			get_resp(host, mrq->cmd);
 		}
-		if (host->sd_info1 & MSK_NX4000_SDIO_SD_INFO1_INFO2 /* ACCESS END */) {
-			data = NULL;
+		if (host->sd_info1 & MSK_NX4000_SDIO_SD_INFO1_INFO2) { /* ACCESS END */
 			host->sd_info1 &=  ~MSK_NX4000_SDIO_SD_INFO1_INFO2;
+			data = NULL;
 			host->state = FINISH_REQUEST;
 		}
+
 		/* only transfer it if dma is not used! */
 		if (data) {
 			if (host->can_use_dma) {
@@ -519,7 +530,8 @@ static void netx4000_hsmmc_handle_irq(struct netx4000_hsmmc_host *host)
 // 				if (host->state == FINISH_REQUEST) {
 // 					dma_done(host);
 // 				}
-			} else {
+			}
+			else {
 				if (host->sd_info2 & (MSK_NX4000_SDIO_SD_INFO2_BRE | MSK_NX4000_SDIO_SD_INFO2_BWE)) {
 					host->sd_info2 &= ~(MSK_NX4000_SDIO_SD_INFO2_BRE | MSK_NX4000_SDIO_SD_INFO2_BWE);
 					if (transfer_data(host, data)) {
@@ -531,13 +543,25 @@ static void netx4000_hsmmc_handle_irq(struct netx4000_hsmmc_host *host)
 				}
 			}
 		}
-	} else {
+	}
+	else {
+		s_fNextAppCmd = 0;
+
+		mrq->cmd->error  = -EIO;
+		if (host->error & MSK_NX4000_SDIO_SD_INFO2_ERR6) {
+			/* Error: Response timeout */
+			mrq->cmd->error = -ETIMEDOUT;
+		}
+		else if ((host->error & MSK_NX4000_SDIO_SD_INFO2_ERR1) && (mrq->cmd->flags & MMC_RSP_CRC)) {
+			/* Error: CRC */
+			mrq->cmd->error = -EILSEQ;
+		}
 		host->error = 0;
+
 		/* in case of an error, stop transmission and return error*/
 		if (data)
 			handle_stop_cmd(host);
 
-		mrq->cmd->error = -EIO;
 		host->state = FINISH_REQUEST;
 	}
 	if (host->state == FINISH_REQUEST) {
@@ -556,7 +580,6 @@ static void dma_done(struct netx4000_hsmmc_host *host)
 static void netx4000_hsmmc_dma_callback(void *priv)
 {
 	struct netx4000_hsmmc_host *host = priv;
-
 	dma_done(host);
 	netx4000_hsmmc_finish_request(host,0);
 }
@@ -592,7 +615,7 @@ struct dma_chan * prepare_dma_buffer( struct netx4000_hsmmc_host *host, struct m
 	desc = dmaengine_prep_slave_sg(host->dma_chan, data->sg, len,
 		data->flags & MMC_DATA_WRITE ? DMA_MEM_TO_DEV : DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 	if (!desc) {
-		printk(KERN_ERR "failedd dmaengine_prep_slave_sg\n");
+		printk(KERN_ERR "failed dmaengine_prep_slave_sg\n");
 		dma_unmap_sg(host->dma_chan->device->dev,
 				data->sg, data->sg_len,
 				data->flags & MMC_DATA_WRITE ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
@@ -622,7 +645,7 @@ static void netx4000_hsmmc_start_command(struct netx4000_hsmmc_host *host, struc
 	struct dma_chan *chan = NULL;
 
 	/* wait for idle */
-	while(host->sd_info2 & MSK_NX4000_SDIO_SD_INFO2_CBSY){}
+	netx4000_wait_for_sclkdiven(host);
 
 	netx4000_hsmmc_disable_irq(host);
 
@@ -660,7 +683,34 @@ static void netx4000_hsmmc_start_command(struct netx4000_hsmmc_host *host, struc
 		default:
 			break;
 	}
+
 	host->state = FINISH_REQUEST;
+
+	/* We have to configure a extended mode as some commands cannot be used in normal mode.
+	 * To make it easier we do it for all commands.
+	 * A test passed successfuly for a SDHC-Card (v2.0) and a MultiMediaCard (v5.0). */
+	switch (mmc_resp_type(cmd)) {
+		case MMC_RSP_NONE:
+			cmd_tmp |= (3 << SRT_NX4000_SDIO_SD_CMD_MD_RSP); /* Extended mode/No response */
+			break;
+		case MMC_RSP_R1:
+// 		case MMC_RSP_R5:
+// 		case MMC_RSP_R6:
+// 		case MMC_RSP_R7:
+			cmd_tmp |= (4 << SRT_NX4000_SDIO_SD_CMD_MD_RSP); /* Extended mode/SD card R1, R5, R6, R7 response */
+			break;
+		case MMC_RSP_R1B:
+			cmd_tmp |= (5 << SRT_NX4000_SDIO_SD_CMD_MD_RSP); /* Extended mode/SD card R1b response */
+			break;
+		case MMC_RSP_R2:
+			cmd_tmp |= (6 << SRT_NX4000_SDIO_SD_CMD_MD_RSP); /* Extended mode/SD card R2 response */
+			break;
+		case MMC_RSP_R3:
+// 		case MMC_RSP_R4:
+			cmd_tmp |= (7 << SRT_NX4000_SDIO_SD_CMD_MD_RSP); /* Extended mode/SD card R3, R4 response */
+			break;
+	}
+
 	/* this is required for dma */
 	host->finsh_request = 1;
 	/* build command */
@@ -700,7 +750,7 @@ static void netx4000_hsmmc_start_command(struct netx4000_hsmmc_host *host, struc
 	/* issue command */
 	writel(cmd_tmp, &regs->sd_cmd);
 	netx4000_hsmmc_enable_irq(host);
-	
+
 	if (host->can_use_dma && chan)
 		dma_async_issue_pending(chan);
 }
@@ -737,6 +787,10 @@ static void netx4000_hsmmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 	if (!host->card_present)
 		return;
+
+	dev_dbg(host->dev,"%s: clock=%d, vdd=%d, bus_mode=%d, chip_select=%d, power_mode=%d, bus_width=%d, timing=%d, signal_voltage=%d, drv_type=%d, enhanced_strobe=%d\n", __func__,
+		ios->clock, ios->vdd, ios->bus_mode, ios->chip_select, ios->power_mode, ios->bus_width, ios->timing, ios->signal_voltage, ios->drv_type, ios->enhanced_strobe
+	);
 
 	//TODO: power/voltage handling...
 
@@ -831,7 +885,7 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	void __iomem *base;
 	struct device_node *np = pdev->dev.of_node;
 	struct clk* clk;
-        
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
 	irq_cd = platform_get_irq_byname(pdev, "card");
