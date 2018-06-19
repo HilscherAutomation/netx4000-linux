@@ -21,6 +21,8 @@
 #include <linux/phy.h>
 #include <linux/microchipphy.h>
 
+#include <linux/netdevice.h>
+
 #define DRIVER_AUTHOR	"WOOJUNG HUH <woojung.huh@microchip.com>"
 #define DRIVER_DESC	"Microchip LAN88XX PHY driver"
 
@@ -106,35 +108,86 @@ static int lan88xx_set_wol(struct phy_device *phydev,
 	return 0;
 }
 
-static struct phy_driver microchip_phy_driver[] = {
+static int lan88xx_config_init(struct phy_device *phydev)
 {
-	.phy_id		= 0x0007c130,
-	.phy_id_mask	= 0xfffffff0,
-	.name		= "Microchip LAN88xx",
+	int ret;
+	uint32_t val32;
 
-	.features	= (PHY_GBIT_FEATURES |
-			   SUPPORTED_Pause | SUPPORTED_Asym_Pause),
-	.flags		= PHY_HAS_INTERRUPT | PHY_HAS_MAGICANEG,
+	ret = genphy_config_init(phydev);
+	if (ret < 0)
+		return ret;
 
-	.probe		= lan88xx_probe,
-	.remove		= lan88xx_remove,
+	if (phy_interface_is_rgmii(phydev)) {
+		netdev_info(phydev->attached_dev, "PHY mode='%s'\n", phy_modes(phydev->interface));
+		val32 = phy_read(phydev, 27);
+		/* Defaulting to PHY_INTERFACE_MODE_RGMII */
+		val32 &= ~((1<<8) | (1 << 9)); // disable RXC- and TXC-Delay
+		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
+			phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID)
+			val32 |= (1<<8); // enable intertnal RXC-Delay
+		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
+			phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID)
+			val32 |= (1<<9); // enable internal TXC-Delay
+		phy_write(phydev, 27, val32);
+	}
+	else
+		netdev_warn(phydev->attached_dev, "PHY mode='%s' not supported\n", phy_modes(phydev->interface));
 
-	.config_init	= genphy_config_init,
-	.config_aneg	= genphy_config_aneg,
-	.read_status	= genphy_read_status,
+	return 0;
+}
 
-	.ack_interrupt	= lan88xx_phy_ack_interrupt,
-	.config_intr	= lan88xx_phy_config_intr,
+static struct phy_driver microchip_phy_driver[] = {
+	{
+		.phy_id		= 0x0007c130,
+		.phy_id_mask	= 0xfffffff0,
+		.name		= "Microchip LAN88xx",
 
-	.suspend	= lan88xx_suspend,
-	.resume		= genphy_resume,
-	.set_wol	= lan88xx_set_wol,
-} };
+		.features	= (PHY_GBIT_FEATURES | SUPPORTED_Pause | SUPPORTED_Asym_Pause),
+		.flags		= PHY_HAS_INTERRUPT | PHY_HAS_MAGICANEG,
+
+		.probe		= lan88xx_probe,
+		.remove		= lan88xx_remove,
+
+		.config_init	= genphy_config_init,
+		.config_aneg	= genphy_config_aneg,
+		.read_status	= genphy_read_status,
+
+		.ack_interrupt	= lan88xx_phy_ack_interrupt,
+		.config_intr	= lan88xx_phy_config_intr,
+
+		.suspend	= lan88xx_suspend,
+		.resume		= genphy_resume,
+		.set_wol	= lan88xx_set_wol,
+	},
+	{
+		.phy_id		= 0x0007c0e0,
+		.phy_id_mask	= 0xfffffff0,
+		.name		= "SMSC LAN8820(i)",
+
+		.features	= (PHY_GBIT_FEATURES | SUPPORTED_Pause | SUPPORTED_Asym_Pause),
+		.flags		= PHY_HAS_INTERRUPT | PHY_HAS_MAGICANEG,
+
+		.probe		= lan88xx_probe,
+		.remove		= lan88xx_remove,
+
+		.config_init	= lan88xx_config_init,
+		.config_aneg	= genphy_config_aneg,
+		.read_status	= genphy_read_status,
+
+		.ack_interrupt	= lan88xx_phy_ack_interrupt,
+		.config_intr	= lan88xx_phy_config_intr,
+
+		.suspend	= lan88xx_suspend,
+		.resume		= genphy_resume,
+		.set_wol	= lan88xx_set_wol,
+	}
+};
 
 module_phy_driver(microchip_phy_driver);
 
 static struct mdio_device_id __maybe_unused microchip_tbl[] = {
 	{ 0x0007c130, 0xfffffff0 },
+	{ 0x0007c0e0, 0xfffffff0 },
 	{ }
 };
 
