@@ -272,7 +272,7 @@
 		/* PINCTRL */
 
 		pinctrl: pinctrl@fb100000 {
-			compatible = "pinctrl-single";
+			compatible = "pinctrl-single-netx4000";
 			reg = <0xfb100000 0x800>;
 			pinctrl-single,register-width = <32>;
 			pinctrl-single,function-mask = <0xffff>;
