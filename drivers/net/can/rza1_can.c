@@ -206,6 +206,51 @@ static const struct can_bittiming_const rz_can_bittiming_const = {
 	.brp_inc = 1,
 };
 
+static void *of_find_property_value_of_size(const struct device_node *np,
+			const char *propname, u32 min, u32 max, size_t *len)
+{
+	struct property *prop = of_find_property(np, propname, NULL);
+
+	if (!prop)
+		return ERR_PTR(-EINVAL);
+	if (!prop->value)
+		return ERR_PTR(-ENODATA);
+	if (prop->length < min)
+		return ERR_PTR(-EOVERFLOW);
+	if (max && prop->length > max)
+		return ERR_PTR(-EOVERFLOW);
+
+	if (len)
+		*len = prop->length;
+
+	return prop->value;
+}
+
+static int of_property_read_variable_u32_array(const struct device_node *np,
+			       const char *propname, u32 *out_values,
+			       size_t sz_min, size_t sz_max)
+{
+	size_t sz, count;
+	const __be32 *val = of_find_property_value_of_size(np, propname,
+						(sz_min * sizeof(*out_values)),
+						(sz_max * sizeof(*out_values)),
+						&sz);
+
+	if (IS_ERR(val))
+		return PTR_ERR(val);
+
+	if (!sz_max)
+		sz = sz_min;
+	else
+		sz /= sizeof(*out_values);
+
+	count = sz;
+	while (count--)
+		*out_values++ = be32_to_cpup(val++);
+
+	return sz;
+}
+
 static void rz_can_write(struct priv_data *priv, unsigned long reg_offs, u32 data)
 {
 	iowrite32(data, priv->base + reg_offs);
