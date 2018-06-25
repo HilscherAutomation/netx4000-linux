@@ -788,8 +788,8 @@ static void netx4000_hsmmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	if (!host->card_present)
 		return;
 
-	dev_dbg(host->dev,"%s: clock=%d, vdd=%d, bus_mode=%d, chip_select=%d, power_mode=%d, bus_width=%d, timing=%d, signal_voltage=%d, drv_type=%d, enhanced_strobe=%d\n", __func__,
-		ios->clock, ios->vdd, ios->bus_mode, ios->chip_select, ios->power_mode, ios->bus_width, ios->timing, ios->signal_voltage, ios->drv_type, ios->enhanced_strobe
+	dev_dbg(host->dev,"%s: clock=%d, vdd=%d, bus_mode=%d, chip_select=%d, power_mode=%d, bus_width=%d, timing=%d, signal_voltage=%d, drv_type=%d\n", __func__,
+		ios->clock, ios->vdd, ios->bus_mode, ios->chip_select, ios->power_mode, ios->bus_width, ios->timing, ios->signal_voltage, ios->drv_type
 	);
 
 	//TODO: power/voltage handling...
