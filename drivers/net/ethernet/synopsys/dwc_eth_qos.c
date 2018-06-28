@@ -1935,7 +1935,8 @@ static int dwceqos_stop(struct net_device *ndev)
 {
 	struct net_local *lp = netdev_priv(ndev);
 
-	phy_stop(lp->phy_dev);
+	if (lp->phy_dev)
+		phy_stop(lp->phy_dev);
 
 	tasklet_disable(&lp->tx_bdreclaim_tasklet);
 	netif_stop_queue(ndev);
