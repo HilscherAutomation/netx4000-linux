@@ -2968,8 +2968,11 @@ static int dwceqos_remove(struct platform_device *pdev)
 			if (of_phy_is_fixed_link(pdev->dev.of_node))
 				of_phy_deregister_fixed_link(pdev->dev.of_node);
 		}
-		mdiobus_unregister(lp->mii_bus);
-		mdiobus_free(lp->mii_bus);
+
+		if (lp->mii_bus) {
+			mdiobus_unregister(lp->mii_bus);
+			mdiobus_free(lp->mii_bus);
+		}
 
 		unregister_netdev(ndev);
 
