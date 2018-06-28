@@ -2987,9 +2987,12 @@ static int dwceqos_remove(struct platform_device *pdev)
 
 		if (lp->phy_dev)
 			phy_disconnect(lp->phy_dev);
-		mdiobus_unregister(lp->mii_bus);
-		kfree(lp->mii_bus->irq);
-		mdiobus_free(lp->mii_bus);
+
+		if (lp->mii_bus) {
+			mdiobus_unregister(lp->mii_bus);
+			kfree(lp->mii_bus->irq);
+			mdiobus_free(lp->mii_bus);
+		}
 
 		unregister_netdev(ndev);
 
