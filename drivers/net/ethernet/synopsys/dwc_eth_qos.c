@@ -1946,7 +1946,8 @@ static int dwceqos_stop(struct net_device *ndev)
 
 	dwceqos_drain_dma(lp);
 	dwceqos_reset_hw(lp);
-	phy_stop(ndev->phydev);
+	if (ndev->phydev)
+		phy_stop(ndev->phydev);
 
 	dwceqos_descriptor_free(lp);
 
