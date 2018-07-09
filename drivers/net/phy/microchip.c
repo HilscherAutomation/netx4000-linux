@@ -107,7 +107,6 @@ static int lan88xx_set_wol(struct phy_device *phydev,
 	return 0;
 }
 
-<<<<<<< HEAD
 static void lan88xx_set_mdix(struct phy_device *phydev)
 {
 	int buf;
@@ -142,10 +141,7 @@ static int lan88xx_config_aneg(struct phy_device *phydev)
 	return genphy_config_aneg(phydev);
 }
 
-static struct phy_driver microchip_phy_driver[] = {
-=======
 static int lan88xx_config_init(struct phy_device *phydev)
->>>>>>> 7a5d3ce... Add support for SMSC LAN8820(i) ethernet PHYs.
 {
 	int ret;
 	uint32_t val32;
