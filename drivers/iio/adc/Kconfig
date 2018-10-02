@@ -588,6 +588,8 @@ config XILINX_XADC
 config IIO_ADC_NETX4000
 	tristate "IIO ADC driver for netX4000 based platforms"
 	depends on ARCH_NETX4000
+	select IIO_BUFFER
+	select IIO_TRIGGERED_BUFFER
 	default y
 	help
 	  This selects support for the IIO ADC controllers on Hilscher netX4000 based platforms.
