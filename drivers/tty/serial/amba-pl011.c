@@ -59,6 +59,7 @@
 #include <linux/sizes.h>
 #include <linux/io.h>
 #include <linux/acpi.h>
+#include <linux/of_gpio.h>
 
 #define UART_NR			14
 
@@ -182,6 +183,9 @@ struct uart_amba_port {
 	struct pl011_dmatx_data	dmatx;
 	bool			dma_probed;
 #endif
+	int rs485_txen_gpio;
+	enum of_gpio_flags rs485_txen_gpio_flags;
+	char rs485_txen_gpio_name[32];
 };
 
 /*
@@ -1177,12 +1181,35 @@ static inline bool pl011_dma_rx_running(struct uart_amba_port *uap)
 
 static void pl011_stop_tx(struct uart_port *port)
 {
+	unsigned int cr;
 	struct uart_amba_port *uap =
 	    container_of(port, struct uart_amba_port, port);
 
 	uap->im &= ~UART011_TXIM;
 	writew(uap->im, uap->port.membase + UART011_IMSC);
 	pl011_dma_tx_stop(uap);
+
+	/* Handle RS-485 */
+	if (port->rs485.flags & SER_RS485_ENABLED) {
+		while (readl(port->membase + UART01x_FR) & UART01x_FR_BUSY)
+			udelay(10);
+		if (port->rs485.delay_rts_after_send)
+			mdelay(port->rs485.delay_rts_after_send);
+		if (uap->rs485_txen_gpio > 0) {
+			if (port->rs485.flags & SER_RS485_RTS_AFTER_SEND)
+				gpio_set_value(uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? 0 : 1);
+			else
+				gpio_set_value(uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? 1 : 0);
+		}
+		else {
+			cr = readw(uap->port.membase + UART011_CR);
+			if (port->rs485.flags & SER_RS485_RTS_AFTER_SEND)
+				cr &= ~UART011_CR_RTS;
+			else
+				cr |= UART011_CR_RTS;
+			writew(cr, uap->port.membase + UART011_CR);
+		}
+	}
 }
 
 static void pl011_tx_chars(struct uart_amba_port *uap, bool from_irq);
@@ -1197,8 +1224,29 @@ static void pl011_start_tx_pio(struct uart_amba_port *uap)
 
 static void pl011_start_tx(struct uart_port *port)
 {
+	unsigned int cr;
 	struct uart_amba_port *uap =
 	    container_of(port, struct uart_amba_port, port);
+
+	/* Handle RS-485 */
+	if (port->rs485.flags & SER_RS485_ENABLED) {
+		if (uap->rs485_txen_gpio > 0) {
+			if (port->rs485.flags & SER_RS485_RTS_ON_SEND)
+				gpio_set_value(uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? 0 : 1);
+			else
+				gpio_set_value(uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? 1 : 0);
+		}
+		else {
+			cr = readw(uap->port.membase + UART011_CR);
+			if (port->rs485.flags & SER_RS485_RTS_ON_SEND)
+				cr |= UART011_CR_RTS;
+			else
+				cr &= ~UART011_CR_RTS;
+			writew(cr, uap->port.membase + UART011_CR);
+		}
+		if (port->rs485.delay_rts_before_send)
+			mdelay(port->rs485.delay_rts_before_send);
+	}
 
 	if (!pl011_dma_tx_start(uap))
 		pl011_start_tx_pio(uap);
@@ -2309,6 +2357,37 @@ static int pl011_find_free_port(void)
 	return -EBUSY;
 }
 
+/* IOCTL support for RS485 */
+static int pl011_rs485_config(struct uart_port *port, struct serial_rs485 *rs485conf)
+{
+	if (rs485conf->flags & SER_RS485_RX_DURING_TX) {
+		dev_warn(port->dev, "Ignore unsupported flag SER_RS485_RX_DURING_TX\n");
+		rs485conf->flags &= ~SER_RS485_RX_DURING_TX;
+	}
+	if (rs485conf->delay_rts_before_send > 99) {
+		dev_warn(port->dev, "Limit delay_rts_before_send to 99ms\n");
+		rs485conf->delay_rts_before_send = 99;
+	}
+	if (rs485conf->delay_rts_after_send > 99) {
+		dev_warn(port->dev, "Limit delay_rts_after_send to 99ms\n");
+		rs485conf->delay_rts_after_send = 99;
+	}
+
+	if (memcmp(&port->rs485, rs485conf, sizeof(port->rs485))) {
+		port->rs485 = *rs485conf;
+		dev_dbg(port->dev, "%cSER_RS485_ENABLED, %cSER_RS485_RTS_ON_SEND, %cSER_RS485_RTS_AFTER_SEND, %cSER_RS485_RX_DURING_TX, delay_rts_before_send %ums, delay_rts_after_send %ums",
+			(port->rs485.flags & SER_RS485_ENABLED) ? '+' : '-',
+			(port->rs485.flags & SER_RS485_RTS_ON_SEND) ? '+' : '-',
+			(port->rs485.flags & SER_RS485_RTS_AFTER_SEND) ? '+' : '-',
+			(port->rs485.flags & SER_RS485_RX_DURING_TX) ? '+' : '-',
+			port->rs485.delay_rts_before_send,
+			port->rs485.delay_rts_before_send
+		);
+	}
+
+	return 0;
+}
+
 static int pl011_setup_port(struct device *dev, struct uart_amba_port *uap,
 			    struct resource *mmiobase, int index)
 {
@@ -2319,6 +2398,19 @@ static int pl011_setup_port(struct device *dev, struct uart_amba_port *uap,
 		return PTR_ERR(base);
 
 	index = pl011_probe_dt_alias(index, dev);
+	of_get_rs485_mode(dev->of_node, &uap->port.rs485);
+	uap->port.rs485_config = pl011_rs485_config;
+
+	uap->rs485_txen_gpio = of_get_named_gpio_flags(dev->of_node, "rs485-txen-gpio", 0, &uap->rs485_txen_gpio_flags);
+	if (uap->rs485_txen_gpio > 0) {
+		snprintf(uap->rs485_txen_gpio_name, sizeof(uap->rs485_txen_gpio_name), "pl011-rs485-txen%d", index);
+		if ((!gpio_is_valid(uap->rs485_txen_gpio)) || (devm_gpio_request_one(dev, uap->rs485_txen_gpio, uap->rs485_txen_gpio_flags, uap->rs485_txen_gpio_name) < 0)) {
+			dev_err(dev, "Error requesting rs485-txen-gpio (%d).\n", uap->rs485_txen_gpio);
+			return -EINVAL;
+		}
+		gpio_direction_output(uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? 1 : 0);
+		dev_info(dev, "gpio%d used as tx-enable for RS485 mode\n", uap->rs485_txen_gpio);
+	}
 
 	uap->old_cr = 0;
 	uap->port.dev = dev;
