@@ -504,4 +504,17 @@ static inline int uart_handle_break(struct uart_port *port)
 					 (cflag) & CRTSCTS || \
 					 !((cflag) & CLOCAL))
 
+/*
+ * Common device tree parsing helpers
+ */
+#ifdef CONFIG_OF_SERIAL
+int of_get_rs485_mode(struct device_node *np, struct serial_rs485 *rs485conf);
+#else
+static inline int of_get_rs485_mode(struct device_node *np,
+				    struct serial_rs485 *rs485conf)
+{
+	return 1;
+}
+#endif
+
 #endif /* LINUX_SERIAL_CORE_H */
