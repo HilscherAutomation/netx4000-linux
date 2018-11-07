@@ -14,6 +14,10 @@ config SERIAL_EARLYCON
 	  the console before standard serial driver is probed. The console is
 	  enabled when early_param is processed.
 
+config OF_SERIAL
+	depends on SERIAL_CORE
+	def_bool y
+
 source "drivers/tty/serial/8250/Kconfig"
 
 comment "Non-8250 serial port support"
