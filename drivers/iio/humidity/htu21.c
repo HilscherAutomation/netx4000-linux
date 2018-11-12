@@ -24,6 +24,10 @@
 
 #include "../common/ms_sensors/ms_sensors_i2c.h"
 
+#include <linux/iio/buffer.h>
+#include <linux/iio/trigger_consumer.h>
+#include <linux/iio/triggered_buffer.h>
+
 #define HTU21_RESET				0xFE
 
 enum {
@@ -34,6 +38,39 @@ enum {
 static const int htu21_samp_freq[4] = { 20, 40, 70, 120 };
 /* String copy of the above const for readability purpose */
 static const char htu21_show_samp_freq[] = "20 40 70 120";
+
+
+static irqreturn_t hut21_trigger_bh_handler(int irq, void *p)
+{
+	struct iio_poll_func *pf = p;
+	struct iio_dev *indio_dev = pf->indio_dev;
+	struct ms_ht_dev *dev_data = iio_priv(indio_dev);
+	int ret, i = 0, buf[4]; /* NOTE: The timestamp must be 8 Byte aligned! */
+
+	memset(buf, 0, sizeof(buf));
+
+	if (test_bit(0, indio_dev->active_scan_mask)) {
+		ret = ms_sensors_ht_read_humidity(dev_data, &buf[i++]);
+		if (ret) {
+			dev_err(indio_dev->dev.parent, "Error while reading humidity!\n");
+			goto done;
+		}
+	}
+	if (test_bit(1, indio_dev->active_scan_mask)) {
+		ret = ms_sensors_ht_read_temperature(dev_data, &buf[i++]);
+		if (ret) {
+			dev_err(indio_dev->dev.parent, "Error while reading temperature!\n");
+			goto done;
+		}
+	}
+
+	iio_push_to_buffers_with_timestamp(indio_dev, buf, pf->timestamp);
+
+done:
+	iio_trigger_notify_done(indio_dev->trig);
+
+	return IRQ_HANDLED;
+}
 
 static int htu21_read_raw(struct iio_dev *indio_dev,
 			  struct iio_chan_spec const *channel, int *val,
@@ -102,15 +139,32 @@ static int htu21_write_raw(struct iio_dev *indio_dev,
 
 static const struct iio_chan_spec htu21_channels[] = {
 	{
-		.type = IIO_TEMP,
-		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_PROCESSED),
-		.info_mask_shared_by_all = BIT(IIO_CHAN_INFO_SAMP_FREQ),
-	 },
-	{
 		.type = IIO_HUMIDITYRELATIVE,
 		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_PROCESSED),
 		.info_mask_shared_by_all = BIT(IIO_CHAN_INFO_SAMP_FREQ),
-	 }
+		.channel = 0,
+		.scan_index = 0,
+		.scan_type = {
+			.sign = 's',
+			.realbits = 12,
+			.storagebits = 32,
+			.shift = 0,
+		},
+	},
+	{
+		.type = IIO_TEMP,
+		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_PROCESSED),
+		.info_mask_shared_by_all = BIT(IIO_CHAN_INFO_SAMP_FREQ),
+		.channel = 1,
+		.scan_index = 1,
+		.scan_type = {
+			.sign = 's',
+			.realbits = 14,
+			.storagebits = 32,
+			.shift = 0,
+		},
+	},
+	IIO_CHAN_SOFT_TIMESTAMP(2)
 };
 
 /*
@@ -122,7 +176,16 @@ static const struct iio_chan_spec ms8607_channels[] = {
 		.type = IIO_HUMIDITYRELATIVE,
 		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_PROCESSED),
 		.info_mask_shared_by_all = BIT(IIO_CHAN_INFO_SAMP_FREQ),
-	 }
+		.channel = 0,
+		.scan_index = 0,
+		.scan_type = {
+			.sign = 's',
+			.realbits = 12,
+			.storagebits = 32,
+			.shift = 0,
+		},
+	},
+	IIO_CHAN_SOFT_TIMESTAMP(1)
 };
 
 static ssize_t htu21_show_battery_low(struct device *dev,
@@ -213,6 +276,12 @@ static int htu21_probe(struct i2c_client *client,
 	} else {
 		indio_dev->channels = htu21_channels;
 		indio_dev->num_channels = ARRAY_SIZE(htu21_channels);
+	}
+
+	ret = iio_triggered_buffer_setup(indio_dev, &iio_pollfunc_store_time, &hut21_trigger_bh_handler, NULL);
+	if (ret) {
+		dev_err(&client->dev, "iio_triggered_buffer_setup() failed\n");
+		return ret;
 	}
 
 	i2c_set_clientdata(client, indio_dev);
