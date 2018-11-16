@@ -508,6 +508,7 @@ static inline int uart_handle_break(struct uart_port *port)
 /*
  * Common device tree parsing helpers
  */
+struct device_node;
 #ifdef CONFIG_OF_SERIAL
 int of_get_rs485_mode(struct device_node *np, struct serial_rs485 *rs485conf);
 #else
