@@ -2399,12 +2399,15 @@ static int pl011_setup_port(struct device *dev, struct uart_amba_port *uap,
 	uap->rs485_txen_gpio = of_get_named_gpio_flags(dev->of_node, "rs485-txen-gpio", 0, &uap->rs485_txen_gpio_flags);
 	if (uap->rs485_txen_gpio > 0) {
 		snprintf(uap->rs485_txen_gpio_name, sizeof(uap->rs485_txen_gpio_name), "pl011-rs485-txen%d", index);
-		if ((!gpio_is_valid(uap->rs485_txen_gpio)) || (devm_gpio_request_one(dev, uap->rs485_txen_gpio, uap->rs485_txen_gpio_flags, uap->rs485_txen_gpio_name) < 0)) {
-			dev_err(dev, "Error requesting rs485-txen-gpio (%d).\n", uap->rs485_txen_gpio);
+		if (!gpio_is_valid(uap->rs485_txen_gpio)) {
+			dev_err(dev, "Invalid GPIO rs485-txen-gpio (%d).\n", uap->rs485_txen_gpio);
 			return -EINVAL;
 		}
-		gpio_direction_output(uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? 1 : 0);
-		dev_info(dev, "gpio%d used as tx-enable for RS485 mode\n", uap->rs485_txen_gpio);
+		if (devm_gpio_request_one(dev, uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? (GPIOF_ACTIVE_LOW | GPIOF_OUT_INIT_HIGH) : GPIOF_OUT_INIT_LOW, uap->rs485_txen_gpio_name) < 0) {
+			dev_err(dev, "Error requesting GPIO rs485-txen-gpio (%d).\n", uap->rs485_txen_gpio);
+			return -EINVAL;
+		}
+		dev_info(dev, "gpio%d used as tx-enable for RS485 mode (active-%s)\n", uap->rs485_txen_gpio, (uap->rs485_txen_gpio_flags & OF_GPIO_ACTIVE_LOW) ? "low" : "high");
 	}
 
 	uap->old_cr = 0;
