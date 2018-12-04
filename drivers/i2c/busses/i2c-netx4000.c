@@ -211,6 +211,7 @@ struct netx4000_i2c_pdata {
 	wait_queue_head_t wait_queue;
 	struct device *dev;
 	struct i2c_adapter adapter;
+	struct i2c_msg dup_msg;
 	struct i2c_msg *msg;
 };
 
@@ -541,10 +542,11 @@ static int32_t netx4000_i2c_master_xfer(struct i2c_adapter *adapter, struct i2c_
 
 		/* Handle the data transfer (read/write) */
 		if (msgs[i].len > 0) {
+			pdata->dup_msg = msgs[i];
 			if (nwr)
-				rc = netx4000_i2c_recv(pdata, &msgs[i], nwr, stop);
+				rc = netx4000_i2c_recv(pdata, &pdata->dup_msg, nwr, stop);
 			else
-				rc = netx4000_i2c_send(pdata, &msgs[i], nwr, stop);
+				rc = netx4000_i2c_send(pdata, &pdata->dup_msg, nwr, stop);
 			if (rc) {
 				break;
 			}
