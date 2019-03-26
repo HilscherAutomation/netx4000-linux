@@ -207,6 +207,7 @@ struct pcs_soc_data {
 struct pcs_device {
 	struct resource *res;
 	void __iomem *base;
+	void __iomem *keyaccess;
 	unsigned size;
 	struct device *dev;
 	struct pinctrl_dev *pctl;
@@ -489,7 +490,11 @@ static int pcs_set_mux(struct pinctrl_dev *pctldev, unsigned fselector,
 
 		val &= ~mask;
 		val |= (vals->val & mask);
+
+		if (pcs->keyaccess)
+			iowrite32(ioread32(pcs->keyaccess), pcs->keyaccess);
 		pcs->write(val, vals->reg);
+
 		raw_spin_unlock_irqrestore(&pcs->lock, flags);
 	}
 
@@ -1970,6 +1975,20 @@ static int pcs_probe(struct platform_device *pdev)
 	ret = pcs_allocate_pin_table(pcs);
 	if (ret < 0)
 		goto free;
+
+	{ /* Add key access control support */
+		struct device_node *node;
+
+		node = of_get_child_by_name(np, "keyaccess-control");
+		if (node) {
+			pcs->keyaccess = of_iomap(node, 0);
+			if (!pcs->keyaccess) {
+				dev_err(&pdev->dev, "Invalid or missing 'reg' node in DT!\n");
+				ret = -EINVAL;
+				goto free;
+			}
+		}
+	}
 
 	pcs->pctl = pinctrl_register(&pcs->desc, pcs->dev, pcs);
 	if (IS_ERR(pcs->pctl)) {
