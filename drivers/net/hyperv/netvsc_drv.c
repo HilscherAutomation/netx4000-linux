@@ -741,6 +741,14 @@ void netvsc_linkstatus_callback(struct hv_device *device_obj,
 	schedule_delayed_work(&ndev_ctx->dwork, 0);
 }
 
+static void netvsc_comp_ipcsum(struct sk_buff *skb)
+{
+	struct iphdr *iph = (struct iphdr *)skb->data;
+
+	iph->check = 0;
+	iph->check = ip_fast_csum(iph, iph->ihl);
+}
+
 static struct sk_buff *netvsc_alloc_recv_skb(struct net_device *net,
 					     struct napi_struct *napi,
 					     const struct ndis_tcp_ip_checksum_info *csum_info,
@@ -764,9 +772,17 @@ static struct sk_buff *netvsc_alloc_recv_skb(struct net_device *net,
 	/* skb is already created with CHECKSUM_NONE */
 	skb_checksum_none_assert(skb);
 
-	/*
-	 * In Linux, the IP checksum is always checked.
-	 * Do L4 checksum offload if enabled and present.
+	/* Incoming packets may have IP header checksum verified by the host.
+	 * They may not have IP header checksum computed after coalescing.
+	 * We compute it here if the flags are set, because on Linux, the IP
+	 * checksum is always checked.
+	 */
+	if (csum_info && csum_info->receive.ip_checksum_value_invalid &&
+	    csum_info->receive.ip_checksum_succeeded &&
+	    skb->protocol == htons(ETH_P_IP))
+		netvsc_comp_ipcsum(skb);
+
+	/* Do L4 checksum offload if enabled and present.
 	 */
 	if (csum_info && (net->features & NETIF_F_RXCSUM)) {
 		if (csum_info->receive.tcp_checksum_succeeded ||
@@ -2110,17 +2126,15 @@ static int netvsc_remove(struct hv_device *dev)
 
 	cancel_delayed_work_sync(&ndev_ctx->dwork);
 
-	rcu_read_lock();
-	nvdev = rcu_dereference(ndev_ctx->nvdev);
-
-	if  (nvdev)
+	rtnl_lock();
+	nvdev = rtnl_dereference(ndev_ctx->nvdev);
+	if (nvdev)
 		cancel_work_sync(&nvdev->subchan_work);
 
 	/*
 	 * Call to the vsc driver to let it know that the device is being
 	 * removed. Also blocks mtu and channel changes.
 	 */
-	rtnl_lock();
 	vf_netdev = rtnl_dereference(ndev_ctx->vf_netdev);
 	if (vf_netdev)
 		netvsc_unregister_vf(vf_netdev);
@@ -2132,7 +2146,6 @@ static int netvsc_remove(struct hv_device *dev)
 	list_del(&ndev_ctx->list);
 
 	rtnl_unlock();
-	rcu_read_unlock();
 
 	hv_set_drvdata(dev, NULL);
 
