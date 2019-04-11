@@ -62,6 +62,8 @@
 
 #define DMA_SDBUF_RW_EN 	0x2
 
+#define SDBUF_MEM_WINDOW 0xF803A200
+
 /* Register Definitions */
 struct netx4000_sdio_reg {
 	u32 sd_cmd;           /* command type and response type */
@@ -143,6 +145,7 @@ struct netx4000_hsmmc_host {
 	struct dma_chan *tx_chan;
 	struct dma_chan *rx_chan;
 	phys_addr_t dma_addr;
+	uint8_t* pab_sdbuf;
 };
 
 static void netx4000_hsmmc_handle_irq(struct netx4000_hsmmc_host *host);
@@ -358,51 +361,14 @@ static int get_resp(struct netx4000_hsmmc_host *host, struct mmc_command *cmd)
 
 static int read_data( struct netx4000_hsmmc_host *host, uint8_t *buff, long num)
 {
-	uint32_t data32 = 0;
-	uint32_t count = num/sizeof(uint32_t);
-	while(count>0) {
-		data32 = readl(&host->reg->sd_buf0);
-		*(buff++) = (uint8_t) (data32 & 0x000000FF);
-		*(buff++) = (uint8_t)((data32 & 0x0000FF00)>> 8);
-		*(buff++) = (uint8_t)((data32 & 0x00FF0000)>>16);
-		*(buff++) = (uint8_t)((data32 & 0xFF000000)>>24);
-		num -= sizeof(uint32_t);
-		count--;
-	}
-	if(num>0) {
-		int i;
-		data32 = readl(&host->reg->sd_buf0);
-		for(i=0;i<num;i++) {
-			*(buff++) = data32 & 0xFF;
-			data32    = (data32 >> (8*i));
-		}
-	}
+	memcpy( buff, host->pab_sdbuf, num);
 	return 0;
 }
 
 static int write_data( struct netx4000_hsmmc_host *host, const uint8_t *buff, long num)
 {
-	uint32_t data32 = 0;
-	uint32_t count = num/sizeof(uint32_t);
-	while(count>0) {
-		data32  = (*buff++);
-		data32 |= (*buff++ <<  8);
-		data32 |= (*buff++ << 16);
-		data32 |= (*buff++ << 24);
-		writel(data32, &host->reg->sd_buf0);
-		num -= sizeof(uint32_t);
-		count--;
-	}
-	if(num>0) {
-		int i;
-		data32 = 0;
-		for(i=0;i<num;i--) {
-			data32 |= (*buff++ << (8*i));
-		}
-		writel( data32, &host->reg->sd_buf0);
-	}
+	memcpy( host->pab_sdbuf, buff, num);
 	return 0;
-
 }
 
 void release_buffer(struct netx4000_hsmmc_host *host)
@@ -590,30 +556,30 @@ struct dma_chan * prepare_dma_buffer( struct netx4000_hsmmc_host *host, struct m
 	struct dma_slave_config cfg;
 	uint32_t len;
 
+	cfg.direction = DMA_MEM_TO_MEM;
 	if (data->flags & MMC_DATA_WRITE) {
 		host->dma_chan = host->tx_chan;
-		cfg.direction = DMA_MEM_TO_DEV;
-		
 	} else {
 		host->dma_chan = host->rx_chan;
-		cfg.direction = DMA_DEV_TO_MEM;
 	}
 	/* TODO: slave configuration should be done once if it does not change */
 	cfg.src_addr = host->dma_addr;
 	cfg.dst_addr = host->dma_addr;
-	cfg.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	cfg.src_maxburst = 128;//1;//128;/* no bursts */
-	cfg.dst_maxburst = 128;//1;//128;/* no bursts */
+
+	cfg.src_addr_width = DMA_SLAVE_BUSWIDTH_8_BYTES;
+	cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_8_BYTES;
+
+	cfg.src_maxburst = 64;
+	cfg.dst_maxburst = 64;
 
 	if (dmaengine_slave_config(host->dma_chan, &cfg))
 		printk(KERN_ERR "Error dmaengine slave config\n");
 
 	len = dma_map_sg(host->dma_chan->device->dev, data->sg, data->sg_len,
-					data->flags & MMC_DATA_WRITE ? DMA_MEM_TO_DEV : DMA_DEV_TO_MEM);
-
+					data->flags & MMC_DATA_WRITE ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
 	desc = dmaengine_prep_slave_sg(host->dma_chan, data->sg, len,
-		data->flags & MMC_DATA_WRITE ? DMA_MEM_TO_DEV : DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+		data->flags & MMC_DATA_WRITE ? DMA_TO_DEVICE : DMA_FROM_DEVICE, DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+
 	if (!desc) {
 		printk(KERN_ERR "failed dmaengine_prep_slave_sg\n");
 		dma_unmap_sg(host->dma_chan->device->dev,
@@ -926,7 +892,6 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	mmc->max_req_size = mmc->max_blk_size * mmc->max_blk_count;
 	mmc->max_seg_size = mmc->max_req_size;
 	mmc->f_max = clk_get_rate(clk);
-
 	mmc->caps = 0;
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED | MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE;
 	mmc->caps |= MMC_CAP_4_BIT_DATA | MMC_CAP_HW_RESET;
@@ -938,7 +903,11 @@ static int netx4000_hsmmc_probe(struct platform_device *pdev)
 	host->dev	= &pdev->dev;
 	host->irq[0]	= irq_cd;
 	host->irq[1]	= irq_access;
-	host->dma_addr  = (phys_addr_t)(res->start + (uint32_t)&((struct netx4000_sdio_reg*)(NULL))->sd_buf0);
+
+	host->pab_sdbuf = ioremap( SDBUF_MEM_WINDOW, 512);
+	if (host->pab_sdbuf == NULL)
+		goto err1;
+	host->dma_addr  = (phys_addr_t)SDBUF_MEM_WINDOW;
 	host->reg	= base;
 	host->card_detect = netx4000_hsmmc_card_detect;
 
@@ -1010,6 +979,9 @@ err_irq:
 		dma_release_channel(host->tx_chan);
 	if (!IS_ERR(host->rx_chan))
 		dma_release_channel(host->rx_chan);
+	if (host->pab_sdbuf)
+		iounmap( host->pab_sdbuf);
+	host->pab_sdbuf = NULL;
 err1:
 	mmc_free_host(mmc);
 err:
@@ -1024,6 +996,9 @@ static int netx4000_hsmmc_remove(struct platform_device *pdev)
 		dma_release_channel(host->tx_chan);
 	if (!IS_ERR(host->rx_chan))
 		dma_release_channel(host->rx_chan);
+	if (host->pab_sdbuf !=NULL)
+		iounmap(host->pab_sdbuf);
+	host->pab_sdbuf = NULL;
 
 	mmc_remove_host(host->mmc);
 
