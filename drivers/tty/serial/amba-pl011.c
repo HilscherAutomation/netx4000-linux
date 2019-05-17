@@ -2402,6 +2402,10 @@ static int pl011_setup_port(struct device *dev, struct uart_amba_port *uap,
 	uap->port.rs485_config = pl011_rs485_config;
 
 	uap->rs485_txen_gpio = of_get_named_gpio_flags(dev->of_node, "rs485-txen-gpio", 0, &uap->rs485_txen_gpio_flags);
+
+	if(uap->rs485_txen_gpio == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
+
 	if (uap->rs485_txen_gpio > 0) {
 		snprintf(uap->rs485_txen_gpio_name, sizeof(uap->rs485_txen_gpio_name), "pl011-rs485-txen%d", index);
 		if (!gpio_is_valid(uap->rs485_txen_gpio)) {
