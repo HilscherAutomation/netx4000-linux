@@ -184,6 +184,8 @@
 #define SQI_PIO_OE          0x30
 #define SQI_PIO_IN          0x34
 #define SQI_SQIROM_CFG      0x38
+
+#define SQI_SQIROM_CFG_ENABLE 0x00000001
 //#define reserved            0x3c
 
 
@@ -860,6 +862,39 @@ static irqreturn_t netx4000_qspi_isr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static void netx4000_qspi_reset_controller(struct priv_data *priv, struct spi_master *master)
+{
+	u32 cr1, tcr;
+
+	if (!ioread32(priv->base + SQI_SQIROM_CFG) & SQI_SQIROM_CFG_ENABLE)
+		return;
+
+	/* Reset in case ROM Loader left flash in 4 Bit mode */
+	dev_info(priv->dev, "SQIROM was enabled at startup. Disabling now!");
+	iowrite32(0, priv->base + SQI_SQIROM_CFG);
+
+	/* ROM Loader keeps it in 4 Bit TX mode, so use it as it is */
+
+	/* Assert CS */
+	cr1 = ioread32(priv->base + SQI_CR1);
+	iowrite32(cr1 | CR1_FssStatic(1) | CR1_Fss(1), priv->base + SQI_CR1);
+
+	/* Send 8 clocks with 0xf to exit fast read mode */
+	iowrite32(0xFFFFFFFF, priv->base + SQI_DR);
+
+	tcr = ioread32(priv->base + SQI_TCR);
+	tcr &= ~(TCR_TransferSize(-1));
+	tcr |= (TCR_TransferSize(3) | TCR_StartTransfer(1));
+	iowrite32(tcr, priv->base + SQI_TCR);
+	while(ioread32(priv->base + SQI_SR) & SR_Busy(1)) ;
+
+	/* De-assert CS */
+	cr1 &= ~(CR1_Fss(-1));
+	iowrite32(cr1, priv->base + SQI_CR1);
+
+	netx4000_qspi_unprepare_transfer_hardware(master);
+}
+
 /* ------ Driver functions ------------------------------------------------- */
 
 /**
@@ -949,6 +984,8 @@ static int netx4000_qspi_probe (struct platform_device *pdev)
 	master->transfer_one = netx4000_qspi_transfer_one;
 	master->prepare_transfer_hardware = netx4000_qspi_prepare_transfer_hardware;
 	master->unprepare_transfer_hardware = netx4000_qspi_unprepare_transfer_hardware;
+
+	netx4000_qspi_reset_controller(priv, master);
 
 	rc = devm_spi_register_master(priv->dev, master);
 	if (rc) {
