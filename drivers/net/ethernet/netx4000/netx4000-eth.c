@@ -379,6 +379,19 @@ static int netx_eth_close(struct net_device *ndev)
 	return 0;
 }
 
+static int netx_eth_mac_addr(struct net_device *ndev, void *p)
+{
+	int rc = eth_mac_addr(ndev, p);
+
+	if(rc == 0) {
+		struct netx_eth_priv *priv = netdev_priv(ndev);
+		port_set_mac_addr(priv->port, ETH_MAC_ADDRESS_CHASSIS,
+				ndev->dev_addr);
+	}
+
+	return rc;
+}
+
 static const struct net_device_ops netx_eth_netdev_ops = {
 	.ndo_open = netx_eth_open,
 	.ndo_stop = netx_eth_close,
@@ -387,7 +400,7 @@ static const struct net_device_ops netx_eth_netdev_ops = {
 	.ndo_set_rx_mode = netx_eth_set_rx_mode,
 	.ndo_change_mtu = eth_change_mtu,
 	.ndo_validate_addr = eth_validate_addr,
-	.ndo_set_mac_address = eth_mac_addr,
+	.ndo_set_mac_address = netx_eth_mac_addr,
 };
 
 static int netx_eth_enable(struct net_device *ndev)
