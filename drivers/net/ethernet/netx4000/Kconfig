@@ -5,7 +5,7 @@
 config NETX4000_XC_STDMAC
 	tristate "Hilscher netX4000 XC Standard ethernet MAC (10/100MBit)"
 	depends on ARCH_NETX4000
-	select FIRMWARE_LOADER
+	select FW_LOADER
 	---help---
 	  This driver supports netX4000 based XC standard MAC devices.
 	  Requires a binary firmware supplied via firmware loader
