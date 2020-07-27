@@ -393,7 +393,6 @@ static int netx4000_update_scan_mode(struct iio_dev *indio_dev, const unsigned l
 static const struct iio_info netx4000_iio_adc_info = {
 	.read_raw = &netx4000_iio_adc_read_raw,
 	.update_scan_mode = &netx4000_update_scan_mode,
-	.driver_module = THIS_MODULE,
 };
 
 static int netx4000_iio_adc_chip_init(struct priv_data *pdata)
