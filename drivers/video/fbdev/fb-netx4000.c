@@ -461,9 +461,9 @@ static int netx4000_fb_probe (struct platform_device *pdev)
 	
 	/* Allocate a zero initialized video buffer (black screen) */
 	priv->fb_size = fbinfo->var.xres_virtual * fbinfo->var.yres_virtual * fbinfo->var.bits_per_pixel / 8;
-	priv->vaFB = dma_zalloc_coherent(priv->dev, PAGE_ALIGN(priv->fb_size), &priv->paFB, GFP_KERNEL);
+	priv->vaFB = dma_alloc_coherent(priv->dev, PAGE_ALIGN(priv->fb_size), &priv->paFB, GFP_KERNEL);
 	if (!priv->vaFB) {
-		dev_err(priv->dev, "dma_zalloc_coherent() failed\n");
+		dev_err(priv->dev, "dma_alloc_coherent() failed\n");
 		goto err_out;
 	}
 
