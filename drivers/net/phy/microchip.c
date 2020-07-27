@@ -304,13 +304,8 @@ static void lan88xx_set_mdix(struct phy_device *phydev)
 
 static int lan88xx_config_init(struct phy_device *phydev)
 {
-	int ret;
 	uint32_t val32;
 	int val;
-
-	ret = genphy_config_init(phydev);
-	if (ret < 0)
-		return ret;
 
 	/* Setup RGMII */
 	if (phy_interface_is_rgmii(phydev)) {
