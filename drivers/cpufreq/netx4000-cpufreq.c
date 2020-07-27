@@ -44,7 +44,6 @@ static int netx4000_cpufreq_set_target(struct cpufreq_policy *policy,
 
 static int netx4000_cpufreq_driver_init(struct cpufreq_policy *policy)
 {
-	int ret;
 	struct device *cpu_dev;
 
 	cpu_dev = get_cpu_device(policy->cpu);
@@ -62,15 +61,9 @@ static int netx4000_cpufreq_driver_init(struct cpufreq_policy *policy)
 
 	netx4000_freq_table[0].frequency = clk_get_rate(policy->clk) / 1000;
 
-	ret = cpufreq_generic_init(policy, netx4000_freq_table, 0);
+	cpufreq_generic_init(policy, netx4000_freq_table, 0);
 
-	if (ret != 0) {
-		pr_err("Failed to configure frequency table: %d\n",
-		       ret);
-		clk_put(policy->clk);
-	}
-
-	return ret;
+	return 0;
 }
 
 static struct cpufreq_driver netx4000_cpufreq_driver = {
