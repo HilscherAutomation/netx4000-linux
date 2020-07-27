@@ -70,7 +70,7 @@ static void netx4000_gpio_irq_handler(struct irq_desc *desc)
 
 	netx4000_gc = to_netx4000_gc(irq_desc_get_handler_data(desc));
 	chip = irq_desc_get_chip(desc);
-	irqdomain = netx4000_gc->chip.gc.irqdomain;
+	irqdomain = netx4000_gc->chip.gc.irq.domain;
 
 	chained_irq_enter(chip, desc);
 
