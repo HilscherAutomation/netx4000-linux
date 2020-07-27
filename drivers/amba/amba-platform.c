@@ -28,6 +28,7 @@
 #include <linux/of_device.h>
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
+#include <linux/pinctrl/pinctrl.h>
 
 static int amba_platform_probe(struct platform_device *pdev)
 {
@@ -45,7 +46,7 @@ static int amba_platform_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, adev);
 
 	adev->dev.of_node = node;
-	of_dma_configure(&adev->dev, node);
+	of_dma_configure(&adev->dev, node, 0);
 
 	/* Allow the HW Peripheral ID to be overridden */
 	prop = of_get_property(node, "arm,primecell-periphid", NULL);
