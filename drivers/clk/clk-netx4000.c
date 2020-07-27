@@ -19,6 +19,7 @@
 */
 
 #include <linux/clk-provider.h>
+#include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/slab.h>
@@ -134,7 +135,7 @@ void of_netx4000_periph_clk_setup(struct device_node *node)
 	of_property_read_string(node, "clock-output-names", &clk_name);
 
 	init.name = clk_name;
-	init.flags = CLK_IS_BASIC;
+	init.flags = 0;
 	init.num_parents = 0;
 	init.ops = &netx4000_hw_clk_ops;
 
