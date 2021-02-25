@@ -34,6 +34,7 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 
+#include "../pci.h"
 
 /* PCI -> AXI */
 #define OFFS_AXI_WINx_BASE(x)		(0x00 | (x<<4)) /* 0x00, 0x10, 0x20, 30 */
@@ -253,7 +254,7 @@ static void netx4000_pcie_all_isr(struct irq_desc *desc)
 			dev_err(priv->dev, "Error receiving unexpected MSI IRQ (%d).\n", hwIrq);
 	}
 	else {
-		dev_err(priv->dev, "Error receiving unexpected IRQ (irqStatus 0x%lx).\n", irqStatus);
+		dev_err(priv->dev, "Error receiving unexpected IRQ (irqStatus 0x%x).\n", irqStatus);
 	}
 
 	chained_irq_exit(chip, desc);
@@ -735,7 +736,7 @@ static int netx4000_pcie_parse_dt(struct platform_device *pdev)
 	}
 
 	INIT_LIST_HEAD(&priv->pci_res);
-	err = of_pci_get_host_bridge_resources(pdev->dev.of_node, 0, 0xff, &priv->pci_res, NULL);
+	err = devm_of_pci_get_host_bridge_resources(&pdev->dev, 0, 0xff, &priv->pci_res, NULL);
 	if (err) {
 		dev_err(&pdev->dev, "Error retrieving bridge resources 'ranges' from DT.\n");
 		return err;
