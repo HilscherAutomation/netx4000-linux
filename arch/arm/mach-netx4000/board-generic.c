@@ -65,12 +65,18 @@ static void __init netx4000_generic_init(void)
 
 #define RAP_SYSCTRL_RSTCTRL 0xf8000050
 #define RAP_SYSCTRL_RSTMASK 0xf8000054
+#define NX4000_RAP2NX_ETH   0x05100000
 
 void netx4000_restart(enum reboot_mode mode, const char *cmd)
 {
 	void __iomem *reset_ctl = (void __iomem*)ioremap(RAP_SYSCTRL_RSTCTRL,4);
 	void __iomem *reset_msk = (void __iomem*)ioremap(RAP_SYSCTRL_RSTMASK,4);
+	void __iomem *intrameth = (void __iomem*)ioremap(NX4000_RAP2NX_ETH, 256);
 	uint32_t reset_mask = 0;
+
+	/* Clear RAM that the ROM code uses to remember booting alternate firmware */
+	memset_io(intrameth, 0, 256);
+	dmb();
 
 	reset_mask = readl(reset_msk);
 	writel((reset_mask | 1), reset_msk);
