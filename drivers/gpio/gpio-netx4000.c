@@ -42,6 +42,7 @@
 
 struct netx4000_gpio_chip {
 	struct of_mm_gpio_chip chip;
+	struct irq_chip irq_chip;
 
 	/* irq handling stuff */
 	spinlock_t gpio_lock;
@@ -164,13 +165,6 @@ static int netx4000_gpio_irq_set_type(struct irq_data *d, unsigned int type)
 	return ret;
 }
 
-static struct irq_chip netx4000_irq_chip = {
-	.name		= "netx4000-gpio",
-	.irq_mask	= netx4000_gpio_irq_mask,
-	.irq_unmask	= netx4000_gpio_irq_unmask,
-	.irq_set_type	= netx4000_gpio_irq_set_type,
-};
-
 static int netx4000_gpio_get(struct gpio_chip *gc, unsigned offset)
 {
 	struct of_mm_gpio_chip *mm_gc;
@@ -259,7 +253,12 @@ static int netx4000_gpio_probe(struct platform_device *pdev)
 	if (netx4000_gc->irq < 0)
 		goto skip_irq;
 
-	ret = gpiochip_irqchip_add(&netx4000_gc->chip.gc, &netx4000_irq_chip, 0,
+	netx4000_gc->irq_chip.name         = "netx4000-gpio";
+	netx4000_gc->irq_chip.irq_mask     = netx4000_gpio_irq_mask;
+	netx4000_gc->irq_chip.irq_unmask   = netx4000_gpio_irq_unmask;
+	netx4000_gc->irq_chip.irq_set_type = netx4000_gpio_irq_set_type;
+
+	ret = gpiochip_irqchip_add(&netx4000_gc->chip.gc, &netx4000_gc->irq_chip, 0,
 		handle_simple_irq, IRQ_TYPE_NONE);
 
 	if (ret) {
@@ -268,7 +267,7 @@ static int netx4000_gpio_probe(struct platform_device *pdev)
 	}
 
 	gpiochip_set_chained_irqchip(&netx4000_gc->chip.gc,
-		&netx4000_irq_chip,
+		&netx4000_gc->irq_chip,
 		netx4000_gc->irq,
 		netx4000_gpio_irq_handler);
 
