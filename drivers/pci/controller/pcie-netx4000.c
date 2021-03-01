@@ -391,7 +391,7 @@ static int netx4000_pcie_msi_irq_init(struct netx4000_pcie_priv *priv)
 	struct netx4000_pcie_msi_priv *msi = priv->msi;
 	struct fwnode_handle *fwnode = of_node_to_fwnode(priv->dev->of_node);
 
-	msi->dmaHandleVirt = dma_alloc_coherent(NULL, sizeof(u32), &priv->msi->dmaHandle, GFP_KERNEL);
+	msi->dmaHandleVirt = dma_alloc_coherent(priv->dev, sizeof(u32), &priv->msi->dmaHandle, GFP_KERNEL);
 	if (!msi->dmaHandleVirt) {
 		dev_err(priv->dev, "Error allocating memory for MSI IRQs.\n");
 		return -ENOMEM;
