@@ -3,9 +3,9 @@
 
 / {
 	fragment@0 {
-		target = <&mdio0>;
+		target = <&xceth0>;
 		__overlay__ {
-			status = "ok";
+			status = "okay";
 		};
 	};
 };

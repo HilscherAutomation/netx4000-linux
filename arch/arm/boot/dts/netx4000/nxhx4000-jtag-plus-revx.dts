@@ -1,9 +1,5 @@
 /*
-* Device tree for Hilscher netX4000 based NXHX4000-JTAG+ rev3 boards
-*
-* arch/arm/boot/dts/netx4000/nxhx4000-jtag-plus-rev3.dts
-*
-* (C) Copyright 2015 Hilscher Gesellschaft fuer Systemautomation mbH
+* (C) Copyright 2018 Hilscher Gesellschaft fuer Systemautomation mbH
 * http://www.hilscher.com
 *
 * This program is free software; you can redistribute it and/or
@@ -13,9 +9,8 @@
 *
 * This program is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 * GNU General Public License for more details.
-*
 */
 
 /dts-v1/;
@@ -23,16 +18,16 @@
 #include "netx4000-common.dtsi"
 
 / {
-	model = "Hilscher NXHX4000-JTAG+ rev3";
+	model = "nxhx4000-jtag-plus-revx";
 	compatible = "hilscher,netx4000";
 
 	chosen {
-		linux,stdout-path = &uart0;
+		stdout-path = &uart0;
 	};
 
 	memory {
 		device_type = "memory";
-		reg = <0x40000000 0x40000000>;
+		reg = <0x0 0x0>; /* will be filled by bootloader */
 	};
 
 	leds {
@@ -63,7 +58,7 @@
 
 /* Static platform gpio pins */
 &pinctrl {
-	pinctrl-single,gpio-range = <
+	pinctrl-single,gpio-range0 = <
 // 		MUX_PIN(3,2)  (REEMUX_1 | REEMUX_DRV_08MA | REEMUX_UDC_NONE)        // mmio2  / gpio0.2  / led p300
 // 		MUX_PIN(3,3)  (REEMUX_1 | REEMUX_DRV_08MA | REEMUX_UDC_NONE)        // mmio3  / gpio0.3  / led p301
 // 		MUX_PIN(3,4)  (REEMUX_1 | REEMUX_DRV_08MA | REEMUX_UDC_NONE)        // mmio4  / gpio0.4  / led p302
@@ -111,28 +106,24 @@
 		&range (MUX_PIN(6,14)/4) 1 (REEMUX_1 | REEMUX_DRV_04MA | REEMUX_UDC_PULLDOWN50K) // mmio62 / gpio2_30 / wake-gpio
 		&range (MUX_PIN(6,15)/4) 1 (REEMUX_1 | REEMUX_DRV_04MA | REEMUX_UDC_PULLDOWN50K) // mmio63 / gpio2_31 / clkreq-gpio
 	>;
-
-	range: gpio-range {
-		#pinctrl-single,gpio-range-cells = <3>;
-	};
 };
 
 &sdmmc0 {
-	status = "ok";
+	status = "okay";
 };
 
 &rtc0 {
-	status = "ok";
+	status = "okay";
 };
 
 &uart0 {
-	status = "ok";
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart0_pins>;
 };
 
 &i2c0 {
-	status = "ok";
+	status = "okay";
 	clock-frequency = <800000>;
 	/* Uncomment the line below to enable the polling mode. */
 //	interrupts = <0>;
@@ -148,47 +139,32 @@
 };
 
 &hcd0 {
-	status = "ok";
+	status = "okay";
 	num-ports = <1>; /* 1 or 2 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&hcd0_0_pins>;
 };
 
 &udc0 {
-	status = "ok";
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&hcd0_1_pins>;
 };
 
 &gmac0 {
-	status = "ok";
-	phy-handle = <&phy0>;
-	phy-mode = "rgmii-id";
-
-	mdio {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		phy0: gmac0_phy@0 {
-			reg = <0>;
-		};
-		phy1: gmac1_phy@4 {
-			reg = <1>;
-		};
-	};
+	status = "okay";
 };
 
 &gmac1 {
-	status = "ok";
-	phy-handle = <&phy1>;
-	phy-mode = "rgmii-id";
+	status = "okay";
 };
 
 &idpm0 {
-	status = "ok";
+	status = "okay";
 };
 
 &pcie_rc {
-	status = "ok";
+	status = "okay";
 	reset-gpio   = <&gpio2 18 GPIO_ACTIVE_LOW>;
 	wake-gpio    = <&gpio2 30 GPIO_ACTIVE_LOW>;
 	clkreq-gpio  = <&gpio2 31 GPIO_ACTIVE_LOW>;

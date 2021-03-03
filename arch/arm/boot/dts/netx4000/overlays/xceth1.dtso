@@ -3,7 +3,7 @@
 
 / {
 	fragment@0 {
-		target = <&gmac1>;
+		target = <&xceth1>;
 		__overlay__ {
 			status = "okay";
 		};
