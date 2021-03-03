@@ -15,32 +15,8 @@
 
 /dts-v1/;
 
-#include "netx4000-common.dtsi"
+#include "nxhx4000-jtag-plus-revx.dts"
 
 / {
-	model = "ndcm4000-rev1";
-	compatible = "hilscher,netx4000";
-
-	chosen {
-		stdout-path = &uart0;
-	};
-
-	memory {
-		device_type = "memory";
-		reg = <0x0 0x0>; /* will be filled by bootloader */
-	};
-};
-
-&uart0 {
-	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins>;
-};
-
-&sdmmc0 {
-	status = "okay";
-};
-
-&rtc0 {
-	status = "okay";
+	model = "nxhx4000-jtag-plus-rev4";
 };

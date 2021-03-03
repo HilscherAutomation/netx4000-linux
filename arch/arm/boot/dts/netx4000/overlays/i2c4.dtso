@@ -3,17 +3,17 @@
 
 / {
 	fragment@0 {
-		target = <&adc1>;
+		target = <&i2c4>;
 		__overlay__ {
 			status = "okay";
-			vref = <3300>;
+			clock-frequency = <100000>;
 		};
 	};
 	__parameters__ {
-		adc1.vref {
-		      desc = "Reference voltage of ADC1 in mV";
+		i2c4.clock {
+		      desc = "I2C clock frequency in Hz";
 		      node = "/fragment@0/__overlay__";
-		      prop = "vref";
+		      prop = "clock-frequency";
 		      type = "unsigned";
 		};
 	};

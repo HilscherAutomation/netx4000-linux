@@ -5,6 +5,7 @@
 #define REEMUX_1  (1 << SRT_PORTCONTROL_CONFIGURATION_SEL)
 #define REEMUX_2  (2 << SRT_PORTCONTROL_CONFIGURATION_SEL)
 #define REEMUX_3  (3 << SRT_PORTCONTROL_CONFIGURATION_SEL)
+#define REEMUX_4  (4 << SRT_PORTCONTROL_CONFIGURATION_SEL)
 
 #define REEMUX_DRV_04MA  (0 << SRT_PORTCONTROL_CONFIGURATION_DRV)
 #define REEMUX_DRV_06MA  (1 << SRT_PORTCONTROL_CONFIGURATION_DRV)
@@ -24,5 +25,20 @@
 #define SRT_PORTCONTROL_CONFIGURATION_SEL   12
 
 #define MUX_PIN(major,minor) ((major * 16 + minor) * 4)
+
+/* netX multiplexer */
+
+#define MMIO(a) (a*4)
+
+#define MMIO_IN_INV  (1<<10)
+#define MMIO_OUT_INV (1<<9)
+
+/* mmio select */
+#define PHY0_LED_PHY_CTRL_LNK 0x77
+#define PHY0_LED_PHY_CTRL_ACT 0x78
+
+#define PHY1_LED_PHY_CTRL_LNK 0x7b
+#define PHY1_LED_PHY_CTRL_ACT 0x7c
+
 
 #endif

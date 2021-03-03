@@ -3,11 +3,12 @@
 
 / {
 	fragment@0 {
-		target = <&uart1>;
+		target = <&can0>;
 		__overlay__ {
 			status = "okay";
+			channels = <0 1>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&uart1_pins>;
+			pinctrl-0 = <&can0_0_pins &can0_1_pins>;
 		};
 	};
 };
