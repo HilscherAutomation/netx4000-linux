@@ -8,7 +8,6 @@
 #include <linux/ethtool.h>
 #include <linux/phy.h>
 #include <linux/microchipphy.h>
-#include <linux/netdevice.h>
 #include <linux/delay.h>
 #include <linux/of.h>
 #include <dt-bindings/net/microchip-lan78xx.h>
@@ -304,24 +303,7 @@ static void lan88xx_set_mdix(struct phy_device *phydev)
 
 static int lan88xx_config_init(struct phy_device *phydev)
 {
-	uint32_t val32;
 	int val;
-
-	/* Setup RGMII */
-	if (phy_interface_is_rgmii(phydev)) {
-		netdev_info(phydev->attached_dev, "PHY mode='%s'\n", phy_modes(phydev->interface));
-		val32 = phy_read(phydev, 27);
-		/* Defaulting to PHY_INTERFACE_MODE_RGMII */
-		val32 &= ~((1<<8) | (1 << 9)); // disable RXC- and TXC-Delay
-		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
-			phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID)
-			val32 |= (1<<8); // enable intertnal RXC-Delay
-		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
-			phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID)
-			val32 |= (1<<9); // enable internal TXC-Delay
-		phy_write(phydev, 27, val32);
-	} else
-		netdev_warn(phydev->attached_dev, "PHY mode='%s' not supported\n", phy_modes(phydev->interface));
 
 	/*Zerodetect delay enable */
 	val = phy_read_mmd(phydev, MDIO_MMD_PCS,
@@ -366,35 +348,12 @@ static struct phy_driver microchip_phy_driver[] = {
 	.set_wol	= lan88xx_set_wol,
 	.read_page	= lan88xx_read_page,
 	.write_page	= lan88xx_write_page,
-},
-{
-        .phy_id         = 0x0007c0e0,
-        .phy_id_mask    = 0xfffffff0,
-        .name           = "Microchip LAN8820(i)",
-
-        /* PHY_GBIT_FEATURES */
-
-        .probe          = lan88xx_probe,
-        .remove         = lan88xx_remove,
-
-        .config_init    = lan88xx_config_init,
-        .config_aneg    = lan88xx_config_aneg,
-
-        .ack_interrupt  = lan88xx_phy_ack_interrupt,
-        .config_intr    = lan88xx_phy_config_intr,
-
-        .suspend        = lan88xx_suspend,
-        .resume         = genphy_resume,
-        .set_wol        = lan88xx_set_wol,
-        .read_page      = lan88xx_read_page,
-        .write_page     = lan88xx_write_page,
 } };
 
 module_phy_driver(microchip_phy_driver);
 
 static struct mdio_device_id __maybe_unused microchip_tbl[] = {
 	{ 0x0007c130, 0xfffffff0 },
-	{ 0x0007c0e0, 0xfffffff0 },
 	{ }
 };
 
