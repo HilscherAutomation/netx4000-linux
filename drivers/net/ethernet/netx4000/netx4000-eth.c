@@ -367,15 +367,15 @@ static int netx_eth_close(struct net_device *ndev)
 
 	netif_stop_queue(ndev);
 
+	phy_stop( priv->phy);
+	phy_disconnect( priv->phy);
+
 	port_stop(priv->port);
 
 	netx4000_xceth_set_irq( priv->portno, 0);
 	free_irq(ndev->irq, ndev);
 
 	netx4000_free_txdesc_lists(priv);
-
-	phy_stop( priv->phy);
-	phy_disconnect( priv->phy);
 
 	return 0;
 }
