@@ -438,6 +438,22 @@ static struct io_ring_ctx *io_ring_ctx_alloc(struct io_uring_params *p)
 	return ctx;
 }
 
+static void io_req_put_fs(struct io_kiocb *req)
+{
+	struct fs_struct *fs = req->fs;
+
+	if (!fs)
+		return;
+
+	spin_lock(&req->fs->lock);
+	if (--fs->users)
+		fs = NULL;
+	spin_unlock(&req->fs->lock);
+	if (fs)
+		free_fs_struct(fs);
+	req->fs = NULL;
+}
+
 static inline bool __io_sequence_defer(struct io_ring_ctx *ctx,
 				       struct io_kiocb *req)
 {
@@ -695,6 +711,7 @@ static void io_free_req_many(struct io_ring_ctx *ctx, void **reqs, int *nr)
 
 static void __io_free_req(struct io_kiocb *req)
 {
+	io_req_put_fs(req);
 	if (req->file && !(req->flags & REQ_F_FIXED_FILE))
 		fput(req->file);
 	percpu_ref_put(&req->ctx->refs);
@@ -1701,16 +1718,7 @@ static int io_send_recvmsg(struct io_kiocb *req, const struct io_uring_sqe *sqe,
 			ret = -EINTR;
 	}
 
-	if (req->fs) {
-		struct fs_struct *fs = req->fs;
-
-		spin_lock(&req->fs->lock);
-		if (--fs->users)
-			fs = NULL;
-		spin_unlock(&req->fs->lock);
-		if (fs)
-			free_fs_struct(fs);
-	}
+	io_req_put_fs(req);
 	io_cqring_add_event(req->ctx, sqe->user_data, ret);
 	io_put_req(req);
 	return 0;
@@ -1899,6 +1907,9 @@ static int io_poll_add(struct io_kiocb *req, const struct io_uring_sqe *sqe)
 	bool cancel = false;
 	__poll_t mask;
 	u16 events;
+
+	if (req->file->f_op->may_pollfree)
+		return -EOPNOTSUPP;
 
 	if (unlikely(req->ctx->flags & IORING_SETUP_IOPOLL))
 		return -EINVAL;
@@ -2226,7 +2237,8 @@ restart:
 		/* Ensure we clear previously set non-block flag */
 		req->rw.ki_flags &= ~IOCB_NOWAIT;
 
-		if (req->fs != current->fs && current->fs != old_fs_struct) {
+		if ((req->fs && req->fs != current->fs) ||
+		    (!req->fs && current->fs != old_fs_struct)) {
 			task_lock(current);
 			if (req->fs)
 				current->fs = req->fs;
@@ -2351,7 +2363,7 @@ out:
 		mmput(cur_mm);
 	}
 	revert_creds(old_cred);
-	if (old_fs_struct) {
+	if (old_fs_struct != current->fs) {
 		task_lock(current);
 		current->fs = old_fs_struct;
 		task_unlock(current);
@@ -3160,6 +3172,7 @@ static int __io_sqe_files_scm(struct io_ring_ctx *ctx, int nr, int offset)
 	}
 
 	skb->sk = sk;
+	skb->scm_io_uring = 1;
 	skb->destructor = io_destruct_skb;
 
 	fpl->user = get_uid(ctx->user);
